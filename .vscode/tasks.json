@@ -2,10 +2,10 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Visual Code Runner: 현재 파일 시각화",
+      "label": "PyRewind: 현재 파일 시각화",
       "type": "shell",
       "command": "python",
-      "args": ["-m", "visual_code_runner", "${file}"],
+      "args": ["-m", "pyrewind", "${file}"],
       "options": { "env": { "PYTHONPATH": "${workspaceFolder}" } },
       "problemMatcher": [],
       "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }

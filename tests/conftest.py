@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from visual_code_runner.tracer import run_trace
+from pyrewind.tracer import run_trace
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES = ROOT / "examples"

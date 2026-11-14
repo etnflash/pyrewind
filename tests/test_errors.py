@@ -1,7 +1,7 @@
 """오류 도우미: 한국어 설명과 이름 오타 추천."""
 import pytest
 
-from visual_code_runner.errors import explain_error
+from pyrewind.errors import explain_error
 
 
 @pytest.mark.parametrize("etype, msg, keyword", [

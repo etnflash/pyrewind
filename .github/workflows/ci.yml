@@ -43,7 +43,7 @@ jobs:
       - name: 확장 테스트 (가짜 vscode API + 실제 파이썬 트레이서)
         run: node vscode-extension/test/extension.test.js
         env:
-          VCR_PYTHON: python
+          PYREWIND_PYTHON: python
       - name: .vsix 패키지 만들기
         run: python build_vsix.py
       - uses: actions/upload-artifact@v4

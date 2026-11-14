@@ -50,7 +50,7 @@ def test_matplotlib_figures_are_captured(tmp_path):
     out = tmp_path / "t.json"
     # matplotlib 백엔드는 프로세스마다 한 번 정해지므로 새 프로세스에서 실행
     env = dict(os.environ, PYTHONPATH=str(ROOT))
-    subprocess.run([sys.executable, "-m", "visual_code_runner", str(prog), "--json", "--no-open", "-q", "-o", str(out)],
+    subprocess.run([sys.executable, "-m", "pyrewind", str(prog), "--json", "--no-open", "-q", "-o", str(out)],
                    check=True, env=env, capture_output=True)
     t = json.loads(out.read_text(encoding="utf-8"))
     assert t["error"] is None

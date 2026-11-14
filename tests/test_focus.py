@@ -4,8 +4,8 @@ import json
 from conftest import final_globals
 from test_notebook import make_nb
 
-from visual_code_runner.__main__ import main
-from visual_code_runner.notebook import load_notebook
+from pyrewind.__main__ import main
+from pyrewind.notebook import load_notebook
 
 
 def test_module_selection_records_only_range_and_stops_after(trace_code):

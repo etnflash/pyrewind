@@ -1,7 +1,7 @@
 """Jupyter 노트북(.ipynb)의 코드 셀을 하나의 파이썬 소스로 합친다.
 
 - 화면용 소스(display)와 실행용 소스(exec)를 따로 만든다. 두 소스의 줄 번호는 같다.
-- 실행용 소스에서는 각 셀의 마지막 식을 __vcr_display__(...) 로 감싸
+- 실행용 소스에서는 각 셀의 마지막 식을 __pyrewind_display__(...) 로 감싸
   주피터처럼 그 값을 출력한다. (끝에 ; 가 있으면 출력하지 않음)
 """
 from __future__ import annotations
@@ -33,7 +33,7 @@ def _wrap_last_expr(lines: list[str]) -> list[str]:
     b = out[el].encode("utf-8")
     out[el] = (b[:ec] + b"))" + b[ec:]).decode("utf-8")
     b = out[sl].encode("utf-8")
-    out[sl] = (b[:sc] + b"__vcr_display__((" + b[sc:]).decode("utf-8")
+    out[sl] = (b[:sc] + b"__pyrewind_display__((" + b[sc:]).decode("utf-8")
     return out
 
 

@@ -29,11 +29,11 @@ _GEN_FLAGS = inspect.CO_GENERATOR | inspect.CO_COROUTINE | inspect.CO_ASYNC_GENE
 
 # matplotlib 그림을 받을 콜백 (mpl_backend 가 사용). 실행 중에만 설정된다.
 IMAGE_HOOK = None
-_MPL_BACKEND = "module://visual_code_runner.mpl_backend"
+_MPL_BACKEND = "module://pyrewind.mpl_backend"
 
 
 def _flush_figures():
-    mb = sys.modules.get("visual_code_runner.mpl_backend")
+    mb = sys.modules.get("pyrewind.mpl_backend")
     if mb is not None:
         try:
             mb.flush()
@@ -523,7 +523,7 @@ def run_trace(path: str, source: str, *, max_steps: int = 3000,
     tracer.cells = cells or []
     tracer.focus = focus
     g = {"__name__": "__main__", "__file__": filename, "__builtins__": builtins,
-         "__vcr_display__": _vcr_display}
+         "__pyrewind_display__": _vcr_display}
 
     sys.stdout = Tee(old_out if echo else None, sink)
     sys.stderr = Tee(old_err if echo else None, sink)

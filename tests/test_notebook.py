@@ -3,8 +3,8 @@ import json
 
 from conftest import final_globals
 
-from visual_code_runner.notebook import load_notebook
-from visual_code_runner.tracer import run_trace
+from pyrewind.notebook import load_notebook
+from pyrewind.tracer import run_trace
 
 
 def make_nb(tmp_path, cells, name="nb.ipynb"):
@@ -41,11 +41,11 @@ def test_last_expression_is_displayed_like_jupyter(tmp_path):
     p = make_nb(tmp_path, [("code", "x = 1\nx"), ("code", "a, b = 1, 2\na, b"),
                            ("code", "y = 3\ny;"), ("code", "print(1)")])
     shown, run, _ = load_notebook(str(p))
-    assert "__vcr_display__((x))" in run
-    assert "__vcr_display__((a, b))" in run      # 괄호 없는 튜플도 값 하나로
-    assert "__vcr_display__((y))" not in run     # ; 로 끝나면 출력 안 함
-    assert "__vcr_display__((print" not in run
-    assert "__vcr_display__" not in shown        # 화면에는 원래 코드
+    assert "__pyrewind_display__((x))" in run
+    assert "__pyrewind_display__((a, b))" in run      # 괄호 없는 튜플도 값 하나로
+    assert "__pyrewind_display__((y))" not in run     # ; 로 끝나면 출력 안 함
+    assert "__pyrewind_display__((print" not in run
+    assert "__pyrewind_display__" not in shown        # 화면에는 원래 코드
 
 
 def test_notebook_runs_with_display_and_cells(tmp_path):

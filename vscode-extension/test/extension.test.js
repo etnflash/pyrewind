@@ -1,6 +1,6 @@
 // VS Code 확장 테스트 - 가짜 vscode API 로 extension.js 를 실제 파이썬 트레이서와 함께 실행한다.
 //   node vscode-extension/test/extension.test.js
-// 환경 변수 VCR_PYTHON 으로 사용할 python 을 지정할 수 있다 (기본: python / python3).
+// 환경 변수 PYREWIND_PYTHON 으로 사용할 python 을 지정할 수 있다 (기본: python / python3).
 "use strict";
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -11,7 +11,7 @@ const os = require("node:os");
 const EXT_DIR = path.resolve(__dirname, "..");
 const REPO = path.resolve(EXT_DIR, "..");
 const EXAMPLES = path.join(REPO, "examples");
-const PYTHON = process.env.VCR_PYTHON || (process.platform === "win32" ? "python" : "python3");
+const PYTHON = process.env.PYREWIND_PYTHON || (process.platform === "win32" ? "python" : "python3");
 
 /* ------------------------------------------------------------ 가짜 vscode */
 class Uri {
@@ -134,12 +134,12 @@ async function openPy(file) {
   state.editors.push(ed);
   vscode.window.activeTextEditor = ed;
   vscode.window.activeNotebookEditor = null;
-  await commands["visualCodeRunner.run"]();
+  await commands["pyrewind.run"]();
   await tick();
   return { doc, ed };
 }
 
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vcr-ext-test-"));
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pyrewind-ext-test-"));
 function tmpPy(name, code) { const p = path.join(tmpDir, name); fs.writeFileSync(p, code, "utf8"); return p; }
 
 /* ------------------------------------------------------------ 테스트 */
@@ -187,7 +187,7 @@ test("에디터 커서 줄 → 그 줄이 실행되는 시점으로 이동 요�
   const { ed } = await openPy(path.join(EXAMPLES, "bug_hunt.py"));
   ed.selection.active.line = 21;
   state.posts.length = 0;
-  await commands["visualCodeRunner.jumpToLine"]();
+  await commands["pyrewind.jumpToLine"]();
   assert.deepEqual(state.posts.at(-1), { type: "jumpToLine", line: 22 });
 });
 
@@ -205,7 +205,7 @@ test("노트북: trace 줄 번호 ↔ 셀 안 줄 번호 변환", async () => {
   state.editors.push(ed);
   vscode.window.activeTextEditor = ed;
   vscode.window.activeNotebookEditor = { notebook: nb };
-  await commands["visualCodeRunner.run"]();
+  await commands["pyrewind.run"]();
   await tick();
   const t = traceFromHtml();
   const meta = t.cells[1];
@@ -213,7 +213,7 @@ test("노트북: trace 줄 번호 ↔ 셀 안 줄 번호 변환", async () => {
   assert.deepEqual(lines(ed, DECO_NEXT), [3]);
   assert.deepEqual(lines(ed, DECO_PREV), [2]);
   ed.selection.active.line = 1;
-  await commands["visualCodeRunner.jumpToLine"]();
+  await commands["pyrewind.jumpToLine"]();
   assert.deepEqual(state.posts.at(-1), { type: "jumpToLine", line: meta.start + 1 });
 });
 
@@ -257,7 +257,7 @@ test("드래그한 줄만 시각화 → --lines 로 선택 영역 기록", async
   ed.selection = selection(16, 0, 20, 0);   // 17~20번 줄 드래그 (21번 줄 맨 앞에서 끝남)
   state.editors.push(ed); state.docs.push(doc);
   vscode.window.activeTextEditor = ed;
-  await commands["visualCodeRunner.runSelection"]();
+  await commands["pyrewind.runSelection"]();
   await tick();
   const t = traceFromHtml();
   assert.deepEqual(t.focus, { start: 17, end: 20 });
@@ -271,7 +271,7 @@ test("선택 없이 실행 → 커서가 있는 '# %%' 블록만 시각화", asy
   ed.selection = selection(3, 0, 3, 0);     // z = y * 2 줄에 커서
   state.editors.push(ed); state.docs.push(doc);
   vscode.window.activeTextEditor = ed;
-  await commands["visualCodeRunner.runSelection"]();
+  await commands["pyrewind.runSelection"]();
   await tick();
   const t = traceFromHtml();
   assert.deepEqual(t.focus, { start: 3, end: 4 });
@@ -290,7 +290,7 @@ test("노트북 셀 툴바 버튼 → 그 셀만 시각화", async () => {
   nb.getCells = () => cells;
   state.notebooks.push(nb);
   const second = cells.filter(c => c.kind === 2)[1];
-  await commands["visualCodeRunner.runSelection"](second);
+  await commands["pyrewind.runSelection"](second);
   await tick();
   const t = traceFromHtml();
   assert.deepEqual(t.focus, { start: t.cells[1].start, end: t.cells[1].end });

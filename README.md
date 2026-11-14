@@ -1,9 +1,11 @@
-# ▶ Visual Code Runner
+# ⏪ PyRewind
 
 **English** | [한국어](README.ko.md)
 
+*Rewind your Python, one line at a time.* (한줄씩 되감는 파이썬)
+
 See how your Python code actually runs — line by line, **forwards and backwards**.
-Visual Code Runner records every step of a `.py` script or a whole Jupyter notebook and lets you replay it,
+PyRewind records every step of a `.py` script or a whole Jupyter notebook and lets you replay it,
 showing variables being created and changed, function calls, pandas DataFrames, plots, and — when
 something breaks — *why* it broke and *where the bad value came from*.
 
@@ -35,9 +37,11 @@ python -m venv .venv && . .venv/bin/activate     # Windows: .venv\Scripts\activa
 pip install -e .                                 # the tool itself (stdlib only)
 pip install -e ".[examples]"                     # pandas / numpy / matplotlib / scikit-learn for the examples
 
-vcr examples/basics.py                           # opens the viewer in your browser
-vcr examples/pandas_tour.ipynb
+pyrewind examples/basics.py                           # opens the viewer in your browser
+pyrewind examples/pandas_tour.ipynb
 ```
+
+`python -m pyrewind <file>` works the same if the `pyrewind` launcher is blocked (e.g. by Windows Smart App Control).
 
 ### VS Code extension
 
@@ -79,7 +83,7 @@ In VS Code: select lines and press **`Ctrl+Alt+Shift+V`** (or right-click → �
 A few details that took some care:
 
 - **Notebook line mapping** — cells are concatenated, but the extension maps every trace line back to the right cell editor (and back again for "jump to this line").
-- **Last-expression display** — the AST of each cell is used to wrap only the final expression (`__vcr_display__((…))`) in an *execution* copy of the source, while the *display* copy stays untouched so line numbers match.
+- **Last-expression display** — the AST of each cell is used to wrap only the final expression (`__pyrewind_display__((…))`) in an *execution* copy of the source, while the *display* copy stays untouched so line numbers match.
 - **Where did this value come from?** — the viewer walks the recorded steps backwards to find when a variable last changed in the same frame, or which call site passed it in as an argument.
 - **Size** — values are interned across steps, which cut an ML notebook trace from ~2 MB to ~260 KB.
 

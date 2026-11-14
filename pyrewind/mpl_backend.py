@@ -1,6 +1,6 @@
 """matplotlib 백엔드: plt.show() 를 부르면 창을 띄우는 대신 그림을 PNG 로 저장해 시각화 화면에 넣는다.
 
-MPLBACKEND=module://visual_code_runner.mpl_backend 로 지정해서 사용한다.
+MPLBACKEND=module://pyrewind.mpl_backend 로 지정해서 사용한다.
 트레이서가 tracer.IMAGE_HOOK 에 콜백을 넣어 두면, 그림이 생길 때마다 base64 PNG 를 넘겨준다.
 """
 from __future__ import annotations

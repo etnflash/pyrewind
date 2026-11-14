@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Visual Code Runner</title>
+<title>PyRewind</title>
 <style>
 :root{
   --bg:#f4f5f8; --panel:#ffffff; --border:#dde1e7; --text:#1d2330; --muted:#6b7380;
@@ -185,7 +185,7 @@ kbd{font-family:inherit;font-size:11px;border:1px solid var(--border);border-bot
 </head>
 <body>
 <header>
-  <h1>▶ Visual <span>Code</span> Runner</h1>
+  <h1>⏪ Py<span>Rewind</span></h1>
   <span class="file" id="fileName"></span>
   <span class="meta" id="meta"></span>
 </header>
@@ -880,7 +880,7 @@ document.addEventListener("keydown", e => {
 $("fileName").textContent = TRACE.file;
 $("meta").textContent = `Python ${TRACE.python} · ${N}단계 기록`
   + (TRACE.focus ? ` · 선택 영역 ${TRACE.focus.start}~${TRACE.focus.end}번 줄` : "");
-document.title = `${TRACE.file} — Visual Code Runner`;
+document.title = `${TRACE.file} — PyRewind`;
 if (!N) {
   $("frames").innerHTML = "";
   $("explain").innerHTML = TRACE.error ? `<li>${errorHelp()}</li>`

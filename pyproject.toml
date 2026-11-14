@@ -1,18 +1,18 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "visual-code-runner"
-version = "0.1.5"
-description = "파이썬 코드가 한 줄씩 실행되며 변수가 만들어지고 바뀌는 과정을 시각화합니다 (.py / .ipynb)"
+name = "pyrewind"
+version = "0.2.0"
+description = "PyRewind — 파이썬 코드를 한 줄씩 앞뒤로 되감으며 변수가 바뀌는 과정을 봅니다 (.py / .ipynb)"
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = []
 keywords = ["python", "education", "visualization", "debugging", "jupyter", "pandas"]
 classifiers = [
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Intended Audience :: Education",
     "Topic :: Software Development :: Debuggers",
@@ -24,13 +24,13 @@ dev = ["pytest>=8"]
 examples = ["pandas", "numpy", "matplotlib", "scikit-learn"]
 
 [project.scripts]
-vcr = "visual_code_runner.__main__:main"
+pyrewind = "pyrewind.__main__:main"
 
 [tool.setuptools]
-packages = ["visual_code_runner"]
+packages = ["pyrewind"]
 
 [tool.setuptools.package-data]
-visual_code_runner = ["viewer.html"]
+pyrewind = ["viewer.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

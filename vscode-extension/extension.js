@@ -1,5 +1,5 @@
-// Visual Code Runner - VS Code 확장
-// 파이썬 트레이서(visual_code_runner)를 실행해 기록을 받고,
+// PyRewind - VS Code 확장
+// 파이썬 트레이서(pyrewind)를 실행해 기록을 받고,
 // 웹뷰 패널에 뷰어를 띄운 뒤 현재 단계를 에디터 줄 강조로 동기화한다.
 "use strict";
 const vscode = require("vscode");
@@ -22,7 +22,7 @@ const deco = {};
 
 function activate(context) {
   ctx = context;
-  output = vscode.window.createOutputChannel("Visual Code Runner");
+  output = vscode.window.createOutputChannel("PyRewind");
 
   const line = (bg, border) => vscode.window.createTextEditorDecorationType({
     isWholeLine: true,
@@ -41,13 +41,13 @@ function activate(context) {
   });
 
   statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
-  statusItem.command = "visualCodeRunner.reveal";
+  statusItem.command = "pyrewind.reveal";
 
   // 단축키가 막혀도 클릭으로 실행할 수 있는 상태 표시줄 버튼
   const runItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 51);
   runItem.text = "$(play-circle) 코드 시각화";
-  runItem.tooltip = "Visual Code Runner: 현재 파일을 한 줄씩 실행하며 시각화 (Ctrl+Alt+V)";
-  runItem.command = "visualCodeRunner.run";
+  runItem.tooltip = "PyRewind: 현재 파일을 한 줄씩 실행하며 시각화 (Ctrl+Alt+V)";
+  runItem.command = "pyrewind.run";
   const updateRunItem = () => {
     const ed = vscode.window.activeTextEditor;
     const show = !!vscode.window.activeNotebookEditor || (ed && /\.(py|ipynb)$/i.test(ed.document.uri.fsPath)) ||
@@ -58,22 +58,22 @@ function activate(context) {
   context.subscriptions.push(runItem,
     vscode.window.onDidChangeActiveTextEditor(updateRunItem),
     vscode.window.onDidChangeActiveNotebookEditor(updateRunItem));
-  output.appendLine("[vcr] Visual Code Runner 활성화됨");
+  output.appendLine("[pyrewind] PyRewind 활성화됨");
 
-  diagnostics = vscode.languages.createDiagnosticCollection("visual-code-runner");
+  diagnostics = vscode.languages.createDiagnosticCollection("pyrewind");
 
   context.subscriptions.push(
     output, statusItem, diagnostics, ...Object.values(deco),
     // 코드를 고치기 시작하면 그 파일의 오류 표시는 지운다 (다시 실행하면 새로 표시)
     vscode.workspace.onDidChangeTextDocument(e => { if (e.contentChanges.length) diagnostics.delete(e.document.uri); }),
-    vscode.commands.registerCommand("visualCodeRunner.run", uri => run(uri)),
-    vscode.commands.registerCommand("visualCodeRunner.runSelection", runSelection),
-    vscode.commands.registerCommand("visualCodeRunner.jumpToLine", jumpToEditorLine),
-    vscode.commands.registerCommand("visualCodeRunner.next", () => post({ type: "key", key: "next" })),
-    vscode.commands.registerCommand("visualCodeRunner.prev", () => post({ type: "key", key: "prev" })),
-    vscode.commands.registerCommand("visualCodeRunner.clear", () => panel && panel.dispose()),
-    vscode.commands.registerCommand("visualCodeRunner.reveal", () => panel && panel.reveal(undefined, true)),
-    vscode.commands.registerCommand("visualCodeRunner.pipInstall", pipInstall),
+    vscode.commands.registerCommand("pyrewind.run", uri => run(uri)),
+    vscode.commands.registerCommand("pyrewind.runSelection", runSelection),
+    vscode.commands.registerCommand("pyrewind.jumpToLine", jumpToEditorLine),
+    vscode.commands.registerCommand("pyrewind.next", () => post({ type: "key", key: "next" })),
+    vscode.commands.registerCommand("pyrewind.prev", () => post({ type: "key", key: "prev" })),
+    vscode.commands.registerCommand("pyrewind.clear", () => panel && panel.dispose()),
+    vscode.commands.registerCommand("pyrewind.reveal", () => panel && panel.reveal(undefined, true)),
+    vscode.commands.registerCommand("pyrewind.pipInstall", pipInstall),
     vscode.languages.registerCodeActionsProvider({ language: "python" }, { provideCodeActions },
       { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }),
     vscode.window.onDidChangeVisibleTextEditors(applyDecorations),
@@ -92,7 +92,7 @@ function samePath(a, b) {
 }
 
 function onSaved(uri) {
-  const cfg = vscode.workspace.getConfiguration("visualCodeRunner");
+  const cfg = vscode.workspace.getConfiguration("pyrewind");
   if (cfg.get("runOnSave") && current && panel && samePath(uri.fsPath, current.fsPath)) run(uri, true, current.focus);
 }
 
@@ -162,9 +162,9 @@ function resolveTarget(arg) {
 
 function packageRoot() {
   const bundled = path.join(ctx.extensionPath, "python");
-  if (fs.existsSync(path.join(bundled, "visual_code_runner", "tracer.py"))) return bundled;
+  if (fs.existsSync(path.join(bundled, "pyrewind", "tracer.py"))) return bundled;
   const dev = path.resolve(ctx.extensionPath, "..");  // 저장소 안에서 개발 모드(F5)로 실행할 때
-  if (fs.existsSync(path.join(dev, "visual_code_runner", "tracer.py"))) return dev;
+  if (fs.existsSync(path.join(dev, "pyrewind", "tracer.py"))) return dev;
   return null;
 }
 
@@ -183,7 +183,7 @@ function workspaceVenvPython(uri) {
 }
 
 async function pythonPath(uri) {
-  let configured = vscode.workspace.getConfiguration("visualCodeRunner").get("pythonPath");
+  let configured = vscode.workspace.getConfiguration("pyrewind").get("pythonPath");
   if (configured) {
     const folder = vscode.workspace.getWorkspaceFolder(uri);
     if (folder) configured = configured.replace(/\$\{workspaceFolder\}/g, folder.uri.fsPath);
@@ -201,7 +201,7 @@ async function pythonPath(uri) {
       }
     }
   } catch (e) {
-    output.appendLine(`[vcr] Python 확장에서 인터프리터를 가져오지 못함: ${e}`);
+    output.appendLine(`[pyrewind] Python 확장에서 인터프리터를 가져오지 못함: ${e}`);
   }
   const venv = workspaceVenvPython(uri);
   if (venv) return venv;
@@ -213,7 +213,7 @@ async function askInputs(fsPath, text) {
   const key = "inputs:" + fsPath;
   const prev = ctx.workspaceState.get(key, "");
   const val = await vscode.window.showInputBox({
-    title: "Visual Code Runner - input() 값",
+    title: "PyRewind - input() 값",
     prompt: "코드에 input() 이 있어요. 차례로 넣을 값을 | 로 구분해 입력하세요 (예: 지수 | 20)",
     value: prev,
     ignoreFocusOut: true,
@@ -224,13 +224,13 @@ async function askInputs(fsPath, text) {
 }
 
 async function run(arg, silent, focus, nbDoc, textDoc) {
-  if (running) { vscode.window.showInformationMessage("Visual Code Runner: 이미 실행 중입니다."); return; }
+  if (running) { vscode.window.showInformationMessage("PyRewind: 이미 실행 중입니다."); return; }
   const target = resolveTarget(arg);
   if (target && nbDoc) target.nb = nbDoc;
   if (target && textDoc) target.doc = textDoc;
   if (!target) { vscode.window.showWarningMessage("시각화할 .py 또는 .ipynb 파일을 먼저 열어 주세요."); return; }
   const fsPath = target.uri.fsPath;
-  if (!/\.(py|ipynb)$/i.test(fsPath)) { vscode.window.showWarningMessage("Visual Code Runner 는 .py / .ipynb 파일만 지원합니다."); return; }
+  if (!/\.(py|ipynb)$/i.test(fsPath)) { vscode.window.showWarningMessage("PyRewind 는 .py / .ipynb 파일만 지원합니다."); return; }
 
   // 저장되지 않은 변경이 있으면 저장
   let text = "";
@@ -241,17 +241,17 @@ async function run(arg, silent, focus, nbDoc, textDoc) {
   } catch (e) { text = ""; }
 
   const root = packageRoot();
-  if (!root) { vscode.window.showErrorMessage("visual_code_runner 파이썬 패키지를 찾을 수 없습니다. 확장을 다시 설치해 주세요."); return; }
+  if (!root) { vscode.window.showErrorMessage("pyrewind 파이썬 패키지를 찾을 수 없습니다. 확장을 다시 설치해 주세요."); return; }
 
   const inputs = await askInputs(fsPath, text);
   if (inputs === undefined) return;
 
   const py = await pythonPath(target.uri);
   lastPython = py;
-  const cfg = vscode.workspace.getConfiguration("visualCodeRunner");
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vcr-"));
+  const cfg = vscode.workspace.getConfiguration("pyrewind");
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pyrewind-"));
   const outJson = path.join(tmpDir, "trace.json");
-  const args = ["-m", "visual_code_runner", fsPath, "--json", "--no-open", "-q",
+  const args = ["-m", "pyrewind", fsPath, "--json", "--no-open", "-q",
     "-o", outJson, "--max-steps", String(cfg.get("maxSteps") || 3000)];
   if (focus) {
     args.push("--lines", `${focus.start}-${focus.end}`);
@@ -269,23 +269,23 @@ async function run(arg, silent, focus, nbDoc, textDoc) {
   });
 
   running = true;
-  output.appendLine(`\n[vcr] ${py} ${args.join(" ")}`);
+  output.appendLine(`\n[pyrewind] ${py} ${args.join(" ")}`);
   try {
     const result = await vscode.window.withProgress(
       { location: silent ? vscode.ProgressLocation.Window : vscode.ProgressLocation.Notification,
-        title: `Visual Code Runner: ${path.basename(fsPath)} 실행 중…`, cancellable: true },
+        title: `PyRewind: ${path.basename(fsPath)} 실행 중…`, cancellable: true },
       (_p, token) => spawnTracer(py, args, env, path.dirname(fsPath), token, (cfg.get("timeoutSeconds") || 60) * 1000));
     if (result.error) {
       if (result.error.code === "ENOENT") {
-        vscode.window.showErrorMessage(`python 을 찾을 수 없습니다 (${py}). 설정에서 visualCodeRunner.pythonPath 를 지정하거나 Python 확장에서 인터프리터를 선택하세요.`, "설정 열기")
-          .then(c => c && vscode.commands.executeCommand("workbench.action.openSettings", "visualCodeRunner.pythonPath"));
-      } else vscode.window.showErrorMessage(`Visual Code Runner 실행 실패: ${result.error.message}`);
+        vscode.window.showErrorMessage(`python 을 찾을 수 없습니다 (${py}). 설정에서 pyrewind.pythonPath 를 지정하거나 Python 확장에서 인터프리터를 선택하세요.`, "설정 열기")
+          .then(c => c && vscode.commands.executeCommand("workbench.action.openSettings", "pyrewind.pythonPath"));
+      } else vscode.window.showErrorMessage(`PyRewind 실행 실패: ${result.error.message}`);
       return;
     }
-    if (result.cancelled) { vscode.window.showWarningMessage("Visual Code Runner: 실행을 중단했습니다."); return; }
+    if (result.cancelled) { vscode.window.showWarningMessage("PyRewind: 실행을 중단했습니다."); return; }
     if (!fs.existsSync(outJson)) {
       output.show(true);
-      vscode.window.showErrorMessage("Visual Code Runner: 기록을 만들지 못했습니다. 출력 창의 로그를 확인하세요.");
+      vscode.window.showErrorMessage("PyRewind: 기록을 만들지 못했습니다. 출력 창의 로그를 확인하세요.");
       return;
     }
     const trace = JSON.parse(fs.readFileSync(outJson, "utf8"));
@@ -310,7 +310,7 @@ function spawnTracer(py, args, env, cwd, token, timeoutMs) {
     child.on("error", e => finish({ error: e }));
     child.on("close", code => finish({ code }));
     const timer = setTimeout(() => {
-      output.appendLine(`[vcr] 제한 시간(${timeoutMs / 1000}초) 초과로 중단`);
+      output.appendLine(`[pyrewind] 제한 시간(${timeoutMs / 1000}초) 초과로 중단`);
       child.kill(); finish({ cancelled: true });
     }, timeoutMs);
     token.onCancellationRequested(() => { child.kill(); finish({ cancelled: true }); });
@@ -320,7 +320,7 @@ function spawnTracer(py, args, env, cwd, token, timeoutMs) {
 /* ------------------------------------------------------------------ 웹뷰 */
 
 function showTrace(trace, target, root) {
-  const viewer = fs.readFileSync(path.join(root, "visual_code_runner", "viewer.html"), "utf8");
+  const viewer = fs.readFileSync(path.join(root, "pyrewind", "viewer.html"), "utf8");
   const data = JSON.stringify(trace).replace(/<\//g, "<\\/");
   const html = viewer.replace("/*__TRACE_DATA__*/null", () => data);
 
@@ -329,7 +329,7 @@ function showTrace(trace, target, root) {
   if (!sameFile) lastStep = null;
 
   if (!panel) {
-    panel = vscode.window.createWebviewPanel("visualCodeRunner", "", { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
+    panel = vscode.window.createWebviewPanel("pyrewind", "", { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
       { enableScripts: true, retainContextWhenHidden: true });
     panel.iconPath = new vscode.ThemeIcon("play-circle");
     panel.webview.onDidReceiveMessage(onMessage);
@@ -338,14 +338,14 @@ function showTrace(trace, target, root) {
       clearDecorations();
       diagnostics.clear();
       statusItem.hide();
-      vscode.commands.executeCommand("setContext", "visualCodeRunner.active", false);
+      vscode.commands.executeCommand("setContext", "pyrewind.active", false);
     });
   } else {
     panel.reveal(undefined, true);
   }
   panel.title = `▶ ${path.basename(target.uri.fsPath)}`;
   panel.webview.html = html;
-  vscode.commands.executeCommand("setContext", "visualCodeRunner.active", true);
+  vscode.commands.executeCommand("setContext", "pyrewind.active", true);
 
   diagnostics.clear();
   lastFix = null;
@@ -370,7 +370,7 @@ function reportError(err) {
     if (sg && sg.kind === "module" && !best) text += `\n📦 설치: pip install ${sg.pip}`;
     if (sg && sg.kind === "kwarg" && sg.params && sg.params.length) text += `\n${sg.owner}() 가 받는 인자: ${sg.params.join(", ")}`;
     const d = new vscode.Diagnostic(range, text, vscode.DiagnosticSeverity.Error);
-    d.source = "Visual Code Runner";
+    d.source = "PyRewind";
     diagnostics.set(target.uri, [d]);
     if (sg) lastFix = { uri: target.uri.toString(), line: target.line, wrong: sg.wrong, options: sg.options || [], kind: sg.kind, pip: sg.pip };
   }
@@ -424,7 +424,7 @@ async function applyRename(replacement) {
 
 function provideCodeActions(document, _range, context) {
   if (!lastFix || document.uri.toString() !== lastFix.uri) return [];
-  const diag = context.diagnostics.find(d => d.source === "Visual Code Runner");
+  const diag = context.diagnostics.find(d => d.source === "PyRewind");
   if (!diag) return [];
   const actions = [];
   lastFix.options.forEach((opt, i) => {
@@ -438,7 +438,7 @@ function provideCodeActions(document, _range, context) {
   });
   if (lastFix.kind === "module" && !lastFix.options.length) {
     const a = new vscode.CodeAction(`터미널에서 pip install ${lastFix.pip} 실행`, vscode.CodeActionKind.QuickFix);
-    a.command = { command: "visualCodeRunner.pipInstall", title: "pip install", arguments: [lastFix.pip] };
+    a.command = { command: "pyrewind.pipInstall", title: "pip install", arguments: [lastFix.pip] };
     a.diagnostics = [diag];
     actions.push(a);
   }
@@ -448,7 +448,7 @@ function provideCodeActions(document, _range, context) {
 function pipInstall(pkg) {
   if (!pkg) return;
   const py = lastPython || (process.platform === "win32" ? "python" : "python3");
-  const term = vscode.window.createTerminal("Visual Code Runner - pip");
+  const term = vscode.window.createTerminal("PyRewind - pip");
   term.show();
   const quoted = /\s/.test(py) ? `& "${py}"` : py;
   term.sendText(`${quoted} -m pip install ${pkg}`);
@@ -462,7 +462,7 @@ function onMessage(m) {
   if (!m || m.type !== "step") return;
   lastStep = m;
   statusItem.text = `$(debug-step-over) VCR ${m.step + 1}/${m.total}`;
-  statusItem.tooltip = "Visual Code Runner 패널 보기";
+  statusItem.tooltip = "PyRewind 패널 보기";
   statusItem.show();
   applyDecorations(true);
 }
@@ -523,7 +523,7 @@ function applyDecorations(reveal) {
     if (s.prev && s.prev !== s.next) place("prev", s.prev);
     if (s.next) place("next", s.next);
   }
-  const inline = vscode.workspace.getConfiguration("visualCodeRunner").get("inlineValues");
+  const inline = vscode.workspace.getConfiguration("pyrewind").get("inlineValues");
   const noteLine = s.err || s.prev || s.next;
   if (inline && noteLine && s.notes && s.notes.length) {
     place("note", noteLine, { renderOptions: { after: { contentText: "◀ " + s.notes.join("   ·   ") } } });

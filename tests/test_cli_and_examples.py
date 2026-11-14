@@ -4,8 +4,8 @@ import json
 import pytest
 from conftest import EXAMPLES
 
-from visual_code_runner.__main__ import main
-from visual_code_runner.render import build_html
+from pyrewind.__main__ import main
+from pyrewind.render import build_html
 
 
 def test_cli_writes_html_viewer(tmp_path):

@@ -1,4 +1,4 @@
-# ▶ Visual Code Runner
+# ⏪ PyRewind — 한줄씩 되감는 파이썬
 
 [English](README.md) | **한국어**
 
@@ -58,18 +58,20 @@ python build_vsix.py --install     # dist/*.vsix 를 만들고 VS Code 에 설�
 ### 명령어 (브라우저로 보기)
 
 ```bash
-vcr 내코드.py                    # 실행 후 브라우저에서 시각화 화면이 열림
-vcr 노트북.ipynb                 # 코드 셀을 순서대로 이어서 실행
-vcr 내코드.py --stdin 입력.txt    # input() 에 넣을 값을 파일에서 한 줄씩 읽음
-vcr 내코드.py --max-steps 10000  # 기록할 단계 수 늘리기 (기본 3000)
-vcr 내코드.py -o 결과.html        # 결과 HTML 저장 (파일 하나라 친구에게 보내기 쉬움)
-vcr 내코드.py --lines 12-15      # 12~15번 줄만 기록 (앞부분은 미리 실행)
-vcr 노트북.ipynb --cell 3         # 3번째 코드 셀만 기록 (--lines 와 함께 쓰면 셀 안 줄 번호)
+pyrewind 내코드.py                    # 실행 후 브라우저에서 시각화 화면이 열림
+pyrewind 노트북.ipynb                 # 코드 셀을 순서대로 이어서 실행
+pyrewind 내코드.py --stdin 입력.txt    # input() 에 넣을 값을 파일에서 한 줄씩 읽음
+pyrewind 내코드.py --max-steps 10000  # 기록할 단계 수 늘리기 (기본 3000)
+pyrewind 내코드.py -o 결과.html        # 결과 HTML 저장 (파일 하나라 친구에게 보내기 쉬움)
+pyrewind 내코드.py --lines 12-15      # 12~15번 줄만 기록 (앞부분은 미리 실행)
+pyrewind 노트북.ipynb --cell 3         # 3번째 코드 셀만 기록 (--lines 와 함께 쓰면 셀 안 줄 번호)
 ```
+
+> `pyrewind` 명령이 Windows 보안(스마트 앱 컨트롤)에 막히면 `python -m pyrewind 내코드.py`처럼 실행하세요. 기능은 같습니다.
 
 ### PyCharm
 
-**Settings → Tools → External Tools → `+`** 에서 Program `vcr`, Arguments `"$FilePath$"`, Working directory `$FileDir$`로 등록하고, **Keymap**에서 단축키를 지정하면 됩니다.
+**Settings → Tools → External Tools → `+`** 에서 Program `pyrewind`, Arguments `"$FilePath$"`, Working directory `$FileDir$`로 등록하고, **Keymap**에서 단축키를 지정하면 됩니다.
 
 ## 화면 보는 법
 
@@ -87,7 +89,7 @@ vcr 노트북.ipynb --cell 3         # 3번째 코드 셀만 기록 (--lines 와
 
 ## 오류 도우미
 
-- **왜 났나요? / 어떻게 고치나요?**: 자주 나는 오류 약 20가지를 초보자 눈높이로 설명합니다 ([errors.py](visual_code_runner/errors.py)).
+- **왜 났나요? / 어떻게 고치나요?**: 자주 나는 오류 약 20가지를 초보자 눈높이로 설명합니다 ([errors.py](pyrewind/errors.py)).
 - **오류가 난 순간, 이 줄에 쓰인 값**과 그 값이 **어디서 왔는지**("함수 인자로 들어옴 (32번 줄에서 호출)") 링크
 - **이름 오타 추천**: 오류가 난 순간의 실제 객체에서 쓸 수 있는 이름(`dir()`, 함수 인자 목록)을 꺼내 가장 비슷한 이름을 추천
 

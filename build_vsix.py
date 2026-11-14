@@ -1,10 +1,10 @@
 """VS Code 확장 패키지(.vsix)를 만든다. Node.js / vsce 없이 파이썬만으로 동작.
 
-    python build_vsix.py                 # dist/visual-code-runner-<버전>.vsix 생성
+    python build_vsix.py                 # dist/pyrewind-<버전>.vsix 생성
     python build_vsix.py --install       # 만든 뒤 VS Code 에 바로 설치 (code 명령 필요)
 
 .vsix 는 zip 파일이며, 안에 extension/ 폴더와 매니페스트 두 개가 들어간다.
-파이썬 트레이서(visual_code_runner)는 extension/python/ 아래에 함께 넣는다.
+파이썬 트레이서(pyrewind)는 extension/python/ 아래에 함께 넣는다.
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from xml.sax.saxutils import escape
 
 ROOT = Path(__file__).resolve().parent
 EXT = ROOT / "vscode-extension"
-PKG = ROOT / "visual_code_runner"
+PKG = ROOT / "pyrewind"
 
 CONTENT_TYPES = {
     ".json": "application/json", ".js": "application/javascript", ".md": "text/markdown",
@@ -35,7 +35,7 @@ def files_to_pack() -> list[tuple[Path, str]]:
             out.append((f, "extension/" + f.relative_to(EXT).as_posix()))
     for f in sorted(PKG.rglob("*")):
         if f.is_file() and "__pycache__" not in f.parts:
-            out.append((f, "extension/python/visual_code_runner/" + f.relative_to(PKG).as_posix()))
+            out.append((f, "extension/python/pyrewind/" + f.relative_to(PKG).as_posix()))
     return out
 
 

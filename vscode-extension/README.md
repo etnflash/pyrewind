@@ -1,4 +1,4 @@
-# Visual Code Runner (VS Code 확장)
+# PyRewind (VS Code 확장)
 
 파이썬 코드가 **한 줄씩 실행되면서 변수가 만들어지고 바뀌는 과정**을 에디터 옆 패널에서 보여줍니다.
 `.py`와 `.ipynb`를 모두 지원하며, pandas DataFrame은 표로 보여줍니다.
@@ -22,7 +22,7 @@
 
 | 설정 | 설명 |
 |---|---|
-| `visualCodeRunner.pythonPath` | 비워 두면 Python 확장에서 선택한 인터프리터(가상환경 포함)를 사용 |
-| `visualCodeRunner.maxSteps` | 기록할 최대 단계 수 (기본 3000) |
-| `visualCodeRunner.runOnSave` | 저장할 때마다 자동으로 다시 실행 |
-| `visualCodeRunner.inlineValues` | 에디터 줄 끝에 변수 변화 표시 |
+| `pyrewind.pythonPath` | 비워 두면 Python 확장에서 선택한 인터프리터(가상환경 포함)를 사용 |
+| `pyrewind.maxSteps` | 기록할 최대 단계 수 (기본 3000) |
+| `pyrewind.runOnSave` | 저장할 때마다 자동으로 다시 실행 |
+| `pyrewind.inlineValues` | 에디터 줄 끝에 변수 변화 표시 |

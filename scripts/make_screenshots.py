@@ -24,7 +24,7 @@ SIZE = (1440, 900)
 
 def build(example: str, tmp: Path) -> Path:
     html = tmp / (Path(example).stem + ".html")
-    subprocess.run([sys.executable, "-m", "visual_code_runner", str(ROOT / "examples" / example),
+    subprocess.run([sys.executable, "-m", "pyrewind", str(ROOT / "examples" / example),
                     "--no-open", "-q", "-o", str(html)], check=True, cwd=ROOT, capture_output=True)
     return html
 

@@ -1,4 +1,4 @@
-"""Visual Code Runner - 코드가 실행되며 변수가 만들어지고 바뀌는 과정을 시각화."""
+"""PyRewind - 코드가 실행되며 변수가 만들어지고 바뀌는 과정을 시각화."""
 from .tracer import run_trace
 from .notebook import load_notebook
 from .render import build_html
