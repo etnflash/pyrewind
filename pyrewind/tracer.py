@@ -496,6 +496,13 @@ def run_trace(path: str, source: str, *, max_steps: int = 3000,
 
     old_backend = os.environ.get("MPLBACKEND")
     os.environ["MPLBACKEND"] = _MPL_BACKEND
+    # matplotlib 을 이미 불러온 프로세스라면 환경 변수는 무시되므로 직접 바꾼다.
+    # (안 바꾸면 Windows / macOS 에서 plt.show() 가 창을 띄우고 닫힐 때까지 멈춤)
+    if "matplotlib" in sys.modules:
+        try:
+            sys.modules["matplotlib"].use(_MPL_BACKEND, force=True)
+        except Exception:
+            pass
     IMAGE_HOOK = on_image
 
     old_out, old_err, old_input = sys.stdout, sys.stderr, builtins.input

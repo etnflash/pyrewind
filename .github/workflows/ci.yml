@@ -9,6 +9,7 @@ jobs:
   python:
     name: Python ${{ matrix.python }} / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20   # 테스트가 멈춰도 6시간(기본값)씩 기다리지 않도록
     strategy:
       fail-fast: false
       matrix:
@@ -31,6 +32,7 @@ jobs:
   extension:
     name: VS Code 확장 테스트
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

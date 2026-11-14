@@ -56,3 +56,23 @@ def test_matplotlib_figures_are_captured(tmp_path):
     assert t["error"] is None
     assert len(t["images"]) == 2
     assert t["output"].count("\x00img:") == 2
+
+
+def test_figures_captured_even_if_matplotlib_was_imported_first(tmp_path):
+    """matplotlib 을 먼저 불러온 프로세스에서도 plt.show() 가 창을 띄우며 멈추지 않아야 한다.
+    (예전에는 Windows / macOS CI 에서 6시간 동안 멈췄음) 혹시 멈춰도 60초 뒤 실패하도록 별도 프로세스에서 실행."""
+    pytest.importorskip("matplotlib")
+    prog = tmp_path / "plot.py"
+    prog.write_text("import matplotlib.pyplot as plt\nplt.plot([1, 2])\nplt.show()\n", encoding="utf-8")
+    script = (
+        "import json, sys, matplotlib\n"          # ← 먼저 불러옴 (기본 백엔드가 정해짐)
+        "from pyrewind.tracer import run_trace\n"
+        "p = sys.argv[1]\n"
+        "t = run_trace(p, open(p, encoding='utf-8').read(), echo=False)\n"
+        "print(json.dumps({'images': len(t['images']), 'error': t['error']}))\n"
+    )
+    env = dict(os.environ, PYTHONPATH=str(ROOT))
+    env.pop("MPLBACKEND", None)
+    res = subprocess.run([sys.executable, "-c", script, str(prog)], env=env, capture_output=True,
+                         text=True, encoding="utf-8", timeout=60, check=True)
+    assert json.loads(res.stdout.strip().splitlines()[-1]) == {"images": 1, "error": None}
