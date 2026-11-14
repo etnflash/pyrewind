@@ -40,9 +40,13 @@ function makeDoc(uri, text) {
     lineAt: i => ({ text: lines[i], range: new Range(i, 0, i, lines[i].length) }),
   };
 }
+function selection(a, ac, b, bc) {
+  return { start: { line: a, character: ac }, end: { line: b, character: bc }, active: { line: b, character: bc },
+    isEmpty: a === b && ac === bc };
+}
 function makeEditor(doc) {
   return {
-    document: doc, decos: new Map(), revealed: null, selection: { active: { line: 0 } },
+    document: doc, decos: new Map(), revealed: null, selection: selection(0, 0, 0, 0),
     setDecorations(type, ranges) { this.decos.set(type, ranges); },
     revealRange(r) { this.revealed = r.line; },
   };
@@ -244,6 +248,53 @@ test("설치되지 않은 패키지 → 지금 쓰는 python 으로 pip install"
   await tick();
   const sent = state.terminals.at(-1).sent[0];
   assert.ok(sent.includes("-m pip install notarealpackage_xyz"), sent);
+});
+
+test("드래그한 줄만 시각화 → --lines 로 선택 영역 기록", async () => {
+  const file = path.join(EXAMPLES, "basics.py");
+  const doc = makeDoc(Uri.file(file), fs.readFileSync(file, "utf8"));
+  const ed = makeEditor(doc);
+  ed.selection = selection(16, 0, 20, 0);   // 17~20번 줄 드래그 (21번 줄 맨 앞에서 끝남)
+  state.editors.push(ed); state.docs.push(doc);
+  vscode.window.activeTextEditor = ed;
+  await commands["visualCodeRunner.runSelection"]();
+  await tick();
+  const t = traceFromHtml();
+  assert.deepEqual(t.focus, { start: 17, end: 20 });
+  assert.equal(t.steps.at(-1).event, "focus_end");
+});
+
+test("선택 없이 실행 → 커서가 있는 '# %%' 블록만 시각화", async () => {
+  const file = tmpPy("percent.py", "x = 1\n# %%\ny = x + 1\nz = y * 2\n# %%\nw = 0\n");
+  const doc = makeDoc(Uri.file(file), fs.readFileSync(file, "utf8"));
+  const ed = makeEditor(doc);
+  ed.selection = selection(3, 0, 3, 0);     // z = y * 2 줄에 커서
+  state.editors.push(ed); state.docs.push(doc);
+  vscode.window.activeTextEditor = ed;
+  await commands["visualCodeRunner.runSelection"]();
+  await tick();
+  const t = traceFromHtml();
+  assert.deepEqual(t.focus, { start: 3, end: 4 });
+  const globals = t.steps.at(-1).stack[0].vars.map(([n]) => n);
+  assert.ok(globals.includes("z") && !globals.includes("w"));
+});
+
+test("노트북 셀 툴바 버튼 → 그 셀만 시각화", async () => {
+  const nbPath = path.join(EXAMPLES, "notebook_demo.ipynb");
+  const nbJson = JSON.parse(fs.readFileSync(nbPath, "utf8"));
+  const nb = { uri: Uri.file(nbPath), isDirty: false, save: async () => true };
+  const cells = nbJson.cells.map((c, i) => ({
+    kind: c.cell_type === "code" ? 2 : 1, notebook: nb,
+    document: makeDoc(new Uri(`${nbPath}#${i}`, "vscode-notebook-cell"), [].concat(c.source).join("")),
+  }));
+  nb.getCells = () => cells;
+  state.notebooks.push(nb);
+  const second = cells.filter(c => c.kind === 2)[1];
+  await commands["visualCodeRunner.runSelection"](second);
+  await tick();
+  const t = traceFromHtml();
+  assert.deepEqual(t.focus, { start: t.cells[1].start, end: t.cells[1].end });
+  assert.equal(t.error, null);
 });
 
 /* ------------------------------------------------------------ 실행 */

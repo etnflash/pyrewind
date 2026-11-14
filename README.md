@@ -14,6 +14,7 @@ Built for beginners who debug by staring at `print` output. The UI and error exp
 ## Features
 
 - **Step forward / backward** through every executed line; click any line to jump to when it runs next.
+- **Run just a selection, a `# %%` block, or one notebook cell** (like R / Spyder): earlier code runs untraced to set up state, then only the selected lines (and functions they call) are recorded, and execution stops after the selection.
 - **Variables and call stack** for each step, with *new* / *changed* / *argument* highlights and `before → after` values.
 - **Structure-aware rendering**: lists as cells, dicts and objects as tables, pandas **DataFrame / Series** and numpy arrays as tables with changed cells highlighted. Aliases share an object number (`#1`), so `b = a; b.append(…)` is visible.
 - **Jupyter notebooks**: all code cells run as one program; last-expression output, `display()`, and matplotlib figures (rendered as images in the output pane) work like in Jupyter.
@@ -55,6 +56,10 @@ The extension uses the interpreter selected in the Python extension, falling bac
 | `--stdin inputs.txt` | values fed to `input()`, one per line |
 | `--max-steps N` | recording limit (default 3000, protects against infinite loops) |
 | `--json` | write the raw trace instead of HTML |
+| `--lines 12-15` | record only these lines (code before them runs untraced) |
+| `--cell 3` | notebooks: record only the 3rd code cell (`--lines` then counts within the cell) |
+
+In VS Code: select lines and press **`Ctrl+Alt+Shift+V`** (or right-click → 선택한 부분만 시각화); with no selection it uses the `# %%` block under the cursor. Notebook cells have a toolbar button.
 
 ## How it works
 

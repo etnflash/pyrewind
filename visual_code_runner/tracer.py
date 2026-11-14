@@ -45,6 +45,10 @@ class StepLimitReached(BaseException):
     """최대 단계 수 초과 (무한 루프 방지). 사용자의 except Exception 에 잡히지 않도록 BaseException."""
 
 
+class FocusDone(BaseException):
+    """선택 영역 실행이 끝남 (그 뒤 코드는 실행하지 않는다)."""
+
+
 def _short(s: str, n: int = MAX_STR) -> str:
     return s if len(s) <= n else s[: n - 1] + "…"
 
@@ -292,6 +296,11 @@ class Tracer:
         # 노트북 셀 경계 (셀이 바뀌면 남은 그래프를 출력 - 주피터와 같은 동작)
         self.cells: list = []
         self.last_cell = None
+        # 선택 영역만 기록 (R / Spyder 의 '선택 실행'): (시작 줄, 끝 줄) 또는 None
+        self.focus: tuple[int, int] | None = None
+        self.focus_started = False
+        self.focus_from_module = False   # 전역 코드에서 시작했으면 영역이 끝날 때 실행을 멈춘다
+        self.focus_frames: set = set()   # 선택 영역에서 호출한 함수 프레임 (안쪽도 기록)
 
     # --- 스냅샷 ---------------------------------------------------------
     def _frame_info(self, f) -> dict:
@@ -317,6 +326,34 @@ class Tracer:
             self.values.append(e)
             self.value_ids[key] = idx
         return idx
+
+    def _in_focus(self, frame) -> bool:
+        return (frame.f_code.co_filename == self.filename
+                and self.focus[0] <= frame.f_lineno <= self.focus[1])
+
+    def _should_record(self, frame, event) -> bool:
+        """선택 영역 모드에서 이 이벤트를 기록할지. (선택 영역이 없으면 항상 기록)"""
+        if self.focus is None:
+            return True
+        if event == "call":
+            caller = frame.f_back
+            if self.focus_started and caller is not None and (caller in self.focus_frames or self._in_focus(caller)):
+                self.focus_frames.add(frame)
+                return True
+            return False
+        if event == "line":
+            if self._in_focus(frame):
+                if not self.focus_started:
+                    self.focus_started = True
+                    self.focus_from_module = frame.f_code.co_name == "<module>"
+                return True
+            if (self.focus_started and self.focus_from_module and frame.f_code.co_name == "<module>"
+                    and frame.f_lineno > self.focus[1]):
+                # 마지막 선택 줄을 실행한 뒤의 상태를 남기고, 다음 줄부터는 실행하지 않음
+                self._record(frame, "focus_end", None)
+                raise FocusDone()
+            return frame in self.focus_frames
+        return frame in self.focus_frames or (self.focus_started and self._in_focus(frame))
 
     def _cell_of(self, line):
         for i, c in enumerate(self.cells):
@@ -373,10 +410,11 @@ class Tracer:
                 if self.last_cell is not None:
                     _flush_figures()  # 이전 셀에서 그린 그래프를 출력
                 self.last_cell = cell
-        if event in ("call", "line", "return", "exception"):
+        if event in ("call", "line", "return", "exception") and self._should_record(frame, event):
             self._record(frame, event, arg)
         if event == "return" and not (frame.f_code.co_flags & _GEN_FLAGS):
             self.fids.pop(frame, None)
+            self.focus_frames.discard(frame)
         return self.trace
 
 
@@ -405,8 +443,12 @@ def _format_error(e: BaseException, filename: str) -> dict:
 def run_trace(path: str, source: str, *, max_steps: int = 3000,
               stdin_lines: list[str] | None = None, echo: bool = True,
               display_name: str | None = None, cells: list | None = None,
-              display_source: str | None = None) -> dict:
-    """source 를 실행한다. display_source 가 있으면 화면에는 그것을 보여준다 (줄 번호는 같아야 함)."""
+              display_source: str | None = None, focus: tuple[int, int] | None = None) -> dict:
+    """source 를 실행한다. display_source 가 있으면 화면에는 그것을 보여준다 (줄 번호는 같아야 함).
+
+    focus=(시작 줄, 끝 줄) 을 주면 그 앞의 코드는 기록 없이 실행해 변수를 준비하고,
+    선택 영역만 한 줄씩 기록한 뒤 (전역 코드 기준) 영역이 끝나면 멈춘다.
+    """
     filename = os.path.abspath(path)
     result = {
         "version": 1,
@@ -420,6 +462,7 @@ def run_trace(path: str, source: str, *, max_steps: int = 3000,
         "error": None,
         "truncated": False,
         "max_steps": max_steps,
+        "focus": {"start": focus[0], "end": focus[1]} if focus else None,
     }
 
     try:
@@ -478,6 +521,7 @@ def run_trace(path: str, source: str, *, max_steps: int = 3000,
 
     tracer = Tracer(filename, max_steps, sink)
     tracer.cells = cells or []
+    tracer.focus = focus
     g = {"__name__": "__main__", "__file__": filename, "__builtins__": builtins,
          "__vcr_display__": _vcr_display}
 
@@ -499,7 +543,7 @@ def run_trace(path: str, source: str, *, max_steps: int = 3000,
     sys.settrace(tracer.trace)
     try:
         exec(code, g)
-    except StepLimitReached:
+    except (StepLimitReached, FocusDone):
         pass
     except SystemExit:
         pass

@@ -80,6 +80,9 @@ header .meta{margin-left:auto;color:var(--muted);font-size:12px}
 .ln.prev{background:var(--prev);border-left-color:var(--prev-bar)}
 .ln.errl{background:var(--err);border-left-color:var(--err-bar)}
 .ln.cellmark{color:var(--accent);font-weight:700}
+.ln.focus .no{color:var(--accent);font-weight:700}
+.ln.focus{box-shadow:inset 3px 0 0 color-mix(in srgb,var(--accent) 55%,transparent)}
+.ln.outside{opacity:.55}
 .tk-kw{color:var(--kw);font-weight:600}.tk-str{color:var(--str)}.tk-num{color:var(--num)}.tk-com{color:var(--com);font-style:italic}.tk-fn{color:var(--fn)}
 /* 컨트롤 */
 .controls{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
@@ -426,7 +429,9 @@ const lineEls = [];
 srcLines.forEach((text, i) => {
   const no = i + 1;
   const d = document.createElement("div");
-  d.className = "ln" + (/^# ═+ \[셀 \d+\]/.test(text) ? " cellmark" : "");
+  const F = TRACE.focus;
+  d.className = "ln" + (/^# ═+ \[셀 \d+\]/.test(text) ? " cellmark" : "")
+    + (F ? (no >= F.start && no <= F.end ? " focus" : " outside") : "");
   d.innerHTML = `<span class="mark"></span><span class="no">${no}</span><span class="cnt"></span><span class="src">${highlight(text) || " "}</span>`;
   d.addEventListener("click", ev => jumpToLine(no, ev.shiftKey));
   d.title = "클릭: 이 줄이 다음에 실행되는 시점으로 이동";
@@ -442,6 +447,8 @@ function diffAt(i){
   const s = steps[i], ps = i > 0 ? steps[i-1] : null;
   const pf = new Map(ps ? ps.stack.map(f=>[f.fid,f]) : []);
   const res = new Map();
+  // 첫 단계는 비교 대상이 없음 (선택 영역 모드에선 앞부분이 미리 실행돼 변수가 이미 있음) → 강조하지 않음
+  if (!ps) { for (const f of s.stack) res.set(f.fid, {vars: new Map(), newFrame: false, deleted: []}); return res; }
   for (const f of s.stack){
     const prevF = pf.get(f.fid);
     const pv = new Map(prevF ? prevF.vars : []);
@@ -526,7 +533,7 @@ function render(){
 
   // 출력
   const end = isLast ? TRACE.output.length : s.out;
-  const start = ps ? Math.min(ps.out, end) : 0;
+  const start = ps ? Math.min(ps.out, end) : end;   // 첫 단계 이전의 출력은 강조하지 않음
   let outText = outHtml(TRACE.output.slice(0, start)) + (end > start ? `<mark>${outHtml(TRACE.output.slice(start, end))}</mark>` : "");
   if (isLast && TRACE.error) outText += `<span class="errtb">${esc(TRACE.error.tb)}</span>`;
   $("output").innerHTML = outText || `<span class="muted">(아직 출력 없음)</span>`;
@@ -576,10 +583,13 @@ function codeOf(line){ return line && srcLines[line-1] !== undefined ? `<span cl
 
 function explain(s, ps, diffs, isLast){
   const out = [];
-  if (!ps) out.push("🚀 프로그램 시작");
+  const F = TRACE.focus;
+  if (!ps) out.push(F
+    ? `🎯 선택한 <b>${F.start}~${F.end}번 줄</b>부터 기록합니다. 그 앞의 코드는 미리 실행해서 변수가 준비된 상태예요.`
+    : "🚀 프로그램 시작");
   if (ps && ps.event === "line") out.push(`✓ 방금 실행: <b>${ps.line}번 줄</b> ${codeOf(ps.line)}`);
   if (ps && ps.event === "call" && ps.func !== "<module>") out.push(`🚪 <b>${esc(ps.func)}()</b> 함수 안으로 들어왔습니다`);
-  if (ps && ps.event === "return" && ps.func !== "<module>" && s.event !== "return") out.push(`🔙 <b>${esc(ps.func)}()</b> 에서 돌아와 호출한 곳(${s.line}번 줄)으로 복귀`);
+  if (ps && ps.event === "return" && ps.func !== "<module>" && s.event !== "return" && s.event !== "focus_end") out.push(`🔙 <b>${esc(ps.func)}()</b> 에서 돌아와 호출한 곳(${s.line}번 줄)으로 복귀`);
 
   if (s.event === "call") {
     const f = s.stack[s.stack.length-1];
@@ -631,6 +641,7 @@ function explain(s, ps, diffs, isLast){
   if (isLast) {
     if (TRACE.error) out.push(errorHelp());
     else if (TRACE.truncated) out.push(`<div class="banner warn">⏸ 최대 ${TRACE.max_steps}단계까지만 기록했습니다. 무한 루프일 수 있어요. (늘리려면 <span class="code-inline">--max-steps 10000</span>)</div>`);
+    else if (F) out.push(`🏁 선택 영역(${F.start}~${F.end}번 줄) 실행 끝${s.event === "focus_end" ? " — 그 뒤 코드는 실행하지 않았어요" : ""}`);
     else out.push("🏁 프로그램 정상 종료");
   }
   return out;
@@ -867,11 +878,14 @@ document.addEventListener("keydown", e => {
 
 /* ---------- 시작 ---------- */
 $("fileName").textContent = TRACE.file;
-$("meta").textContent = `Python ${TRACE.python} · ${N}단계 기록`;
+$("meta").textContent = `Python ${TRACE.python} · ${N}단계 기록`
+  + (TRACE.focus ? ` · 선택 영역 ${TRACE.focus.start}~${TRACE.focus.end}번 줄` : "");
 document.title = `${TRACE.file} — Visual Code Runner`;
 if (!N) {
   $("frames").innerHTML = "";
-  $("explain").innerHTML = TRACE.error ? `<li>${errorHelp()}</li>` : "<li>기록된 단계가 없습니다.</li>";
+  $("explain").innerHTML = TRACE.error ? `<li>${errorHelp()}</li>`
+    : TRACE.focus ? `<li>선택한 ${TRACE.focus.start}~${TRACE.focus.end}번 줄이 한 번도 실행되지 않았어요. 호출되지 않은 함수 안이거나, 조건문 때문에 건너뛴 부분일 수 있어요.</li>`
+    : "<li>기록된 단계가 없습니다.</li>";
   if (TRACE.error && TRACE.error.line && lineEls[TRACE.error.line-1]) lineEls[TRACE.error.line-1].classList.add("errl");
   $("output").innerHTML = TRACE.error ? `<span class="errtb">${esc(TRACE.error.tb)}</span>` : "";
   document.querySelectorAll("button").forEach(b => b.disabled = true);

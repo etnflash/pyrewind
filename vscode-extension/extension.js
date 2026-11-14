@@ -67,6 +67,7 @@ function activate(context) {
     // 코드를 고치기 시작하면 그 파일의 오류 표시는 지운다 (다시 실행하면 새로 표시)
     vscode.workspace.onDidChangeTextDocument(e => { if (e.contentChanges.length) diagnostics.delete(e.document.uri); }),
     vscode.commands.registerCommand("visualCodeRunner.run", uri => run(uri)),
+    vscode.commands.registerCommand("visualCodeRunner.runSelection", runSelection),
     vscode.commands.registerCommand("visualCodeRunner.jumpToLine", jumpToEditorLine),
     vscode.commands.registerCommand("visualCodeRunner.next", () => post({ type: "key", key: "next" })),
     vscode.commands.registerCommand("visualCodeRunner.prev", () => post({ type: "key", key: "prev" })),
@@ -92,7 +93,62 @@ function samePath(a, b) {
 
 function onSaved(uri) {
   const cfg = vscode.workspace.getConfiguration("visualCodeRunner");
-  if (cfg.get("runOnSave") && current && panel && samePath(uri.fsPath, current.fsPath)) run(uri, true);
+  if (cfg.get("runOnSave") && current && panel && samePath(uri.fsPath, current.fsPath)) run(uri, true, current.focus);
+}
+
+/* ------------------------------------------------------- 선택 영역 실행 */
+
+// Spyder / VS Code 처럼 '# %%' 로 나눈 블록: 커서가 있는 블록의 줄 범위(0부터) 또는 null
+function percentCellRange(doc, line) {
+  const isMark = i => /^\s*#\s*%%/.test(doc.lineAt(i).text);
+  let hasMark = false;
+  for (let i = 0; i < doc.lineCount && !hasMark; i++) hasMark = isMark(i);
+  if (!hasMark) return null;
+  let a = line;
+  while (a > 0 && !isMark(a)) a--;
+  if (isMark(a)) a++;
+  let b = line + 1;
+  while (b < doc.lineCount && !isMark(b)) b++;
+  return a <= b - 1 ? [a, b - 1] : null;
+}
+
+// 선택한 줄 / '# %%' 블록 / 노트북 셀만 시각화.
+// 노트북 셀 툴바에서 부르면 arg 로 그 셀(NotebookCell)이 넘어온다.
+async function runSelection(arg) {
+  let ed = vscode.window.activeTextEditor;
+  let cellDoc = null;
+  if (arg && arg.document && arg.notebook) {           // 셀 툴바 버튼
+    cellDoc = arg.document;
+    ed = vscode.window.visibleTextEditors.find(e => e.document === cellDoc) || null;
+  } else if (ed && ed.document.uri.scheme === "vscode-notebook-cell") {
+    cellDoc = ed.document;
+  }
+  if (!ed && !cellDoc) { vscode.window.showWarningMessage("시각화할 코드를 선택하거나 셀을 골라 주세요."); return; }
+
+  const doc = cellDoc || ed.document;
+  let a, b;
+  const sel = ed && ed.document === doc ? ed.selection : null;
+  if (sel && !sel.isEmpty) {
+    a = sel.start.line;
+    b = sel.end.line;
+    if (sel.end.character === 0 && b > a) b--;        // 다음 줄 맨 앞까지 드래그한 경우
+  } else if (cellDoc) {
+    a = 0; b = doc.lineCount - 1;                       // 노트북: 셀 전체
+  } else {
+    const line = sel ? sel.active.line : 0;
+    [a, b] = percentCellRange(doc, line) || [line, line];
+  }
+
+  const focus = { start: a + 1, end: b + 1 };
+  if (cellDoc) {
+    const nb = vscode.workspace.notebookDocuments.find(n => n.getCells().some(c => c.document === cellDoc));
+    if (!nb) { vscode.window.showWarningMessage("노트북을 찾을 수 없습니다."); return; }
+    const codeCells = nb.getCells().filter(c => c.kind === vscode.NotebookCellKind.Code);
+    focus.cell = codeCells.findIndex(c => c.document === cellDoc) + 1;
+    await run(nb.uri, false, focus, nb);
+  } else {
+    await run(doc.uri, false, focus, null, doc);
+  }
 }
 
 function resolveTarget(arg) {
@@ -167,9 +223,11 @@ async function askInputs(fsPath, text) {
   return val.split("|").map(s => s.trim());
 }
 
-async function run(arg, silent) {
+async function run(arg, silent, focus, nbDoc, textDoc) {
   if (running) { vscode.window.showInformationMessage("Visual Code Runner: 이미 실행 중입니다."); return; }
   const target = resolveTarget(arg);
+  if (target && nbDoc) target.nb = nbDoc;
+  if (target && textDoc) target.doc = textDoc;
   if (!target) { vscode.window.showWarningMessage("시각화할 .py 또는 .ipynb 파일을 먼저 열어 주세요."); return; }
   const fsPath = target.uri.fsPath;
   if (!/\.(py|ipynb)$/i.test(fsPath)) { vscode.window.showWarningMessage("Visual Code Runner 는 .py / .ipynb 파일만 지원합니다."); return; }
@@ -195,6 +253,10 @@ async function run(arg, silent) {
   const outJson = path.join(tmpDir, "trace.json");
   const args = ["-m", "visual_code_runner", fsPath, "--json", "--no-open", "-q",
     "-o", outJson, "--max-steps", String(cfg.get("maxSteps") || 3000)];
+  if (focus) {
+    args.push("--lines", `${focus.start}-${focus.end}`);
+    if (focus.cell) args.push("--cell", String(focus.cell));
+  }
   if (inputs) {
     const stdinFile = path.join(tmpDir, "stdin.txt");
     fs.writeFileSync(stdinFile, inputs.join("\n"), "utf8");
@@ -228,6 +290,7 @@ async function run(arg, silent) {
     }
     const trace = JSON.parse(fs.readFileSync(outJson, "utf8"));
     showTrace(trace, target, root);
+    if (current) current.focus = focus || null;
   } finally {
     running = false;
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (e) { /* 무시 */ }
