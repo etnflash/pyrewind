@@ -2,6 +2,8 @@
 
 [English](README.md) | **한국어**
 
+**▶ [설치 없이 브라우저에서 바로 체험하기](https://etnflash.github.io/pyrewind/)**
+
 `print`로 찍힌 **결과만** 보고 디버깅하기 어려울 때 쓰는 도구입니다.
 파이썬 코드를 **한 줄씩** 실행하면서, 변수가 만들어지고 바뀌는 과정을 앞뒤로 넘겨 볼 수 있어요.
 `.py`와 `.ipynb`(주피터 노트북)를 지원하며 VS Code 안에서 쓰거나 브라우저로 볼 수 있습니다.
@@ -146,6 +148,10 @@ python build_vsix.py                              # dist/*.vsix 만들기
 - VS Code에서 이 폴더를 열고 `F5`를 누르면 확장을 개발 모드로 실행합니다.
 - GitHub Actions가 Windows / macOS / Linux, Python 3.10 ~ 3.15에서 테스트를 실행합니다 ([ci.yml](.github/workflows/ci.yml)).
 - README 이미지는 `python scripts/make_screenshots.py`로 다시 만들 수 있습니다 (Windows + Edge).
+
+## 만든 방법
+
+AI 코딩 도구 [Claude Code](https://claude.com/claude-code)의 도움을 받아 만들었습니다.
 
 ## 라이선스
 

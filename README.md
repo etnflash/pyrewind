@@ -4,6 +4,8 @@
 
 *Rewind your Python, one line at a time.* (한줄씩 되감는 파이썬)
 
+**▶ [Try it in your browser — no install](https://etnflash.github.io/pyrewind/)**
+
 See how your Python code actually runs — line by line, **forwards and backwards**.
 PyRewind records every step of a `.py` script or a whole Jupyter notebook and lets you replay it,
 showing variables being created and changed, function calls, pandas DataFrames, plots, and — when
@@ -104,6 +106,10 @@ python build_vsix.py                               # build dist/*.vsix
 
 CI runs the Python tests on Windows / macOS / Linux with Python 3.10–3.15, plus the extension tests and a `.vsix` build ([ci.yml](.github/workflows/ci.yml)).
 Press `F5` in VS Code to launch the extension in development mode. Screenshots are regenerated with `python scripts/make_screenshots.py`.
+
+## Credits
+
+Built with the help of [Claude Code](https://claude.com/claude-code), an AI coding assistant.
 
 ## License
 
