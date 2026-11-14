@@ -1,0 +1,11 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Visual Code Runner 확장 실행 (개발용)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}/vscode-extension", "${workspaceFolder}/examples"]
+    }
+  ]
+}

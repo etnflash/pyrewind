@@ -1,0 +1,889 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Visual Code Runner</title>
+<style>
+:root{
+  --bg:#f4f5f8; --panel:#ffffff; --border:#dde1e7; --text:#1d2330; --muted:#6b7380;
+  --code-bg:#fbfbfc; --gutter:#9aa1ad;
+  --next:#fff0b8; --next-bar:#d9a400;
+  --prev:#ddf4e4; --prev-bar:#2e9e5b;
+  --err:#fde0de; --err-bar:#d93a2f;
+  --changed:#fff3c2; --new:#dcf0ff; --arg:#ece6ff;
+  --str:#a3401b; --num:#1f5fbf; --kw:#7a3fb5; --com:#8a919c; --fn:#0d7a6e;
+  --accent:#3b6fe0; --chip:#eef1f6;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#121419; --panel:#1b1e25; --border:#2c313b; --text:#e3e6ec; --muted:#8b93a1;
+    --code-bg:#171a20; --gutter:#5d6573;
+    --next:#463a10; --next-bar:#f2c037;
+    --prev:#163222; --prev-bar:#4cc27e;
+    --err:#4a1d1b; --err-bar:#ff6b5e;
+    --changed:#43380f; --new:#123349; --arg:#2a2347;
+    --str:#f0a07a; --num:#79b0ff; --kw:#c79bff; --com:#6e7685; --fn:#5fd3c2;
+    --accent:#6d97ff; --chip:#262a33;
+  }
+}
+/* VS Code 웹뷰 안에서는 에디터 테마를 따른다 */
+body.vscode-dark,body.vscode-high-contrast:not(.vscode-high-contrast-light){
+  --bg:#121419; --panel:#1b1e25; --border:#2c313b; --text:#e3e6ec; --muted:#8b93a1;
+  --code-bg:#171a20; --gutter:#5d6573;
+  --next:#463a10; --next-bar:#f2c037;
+  --prev:#163222; --prev-bar:#4cc27e;
+  --err:#4a1d1b; --err-bar:#ff6b5e;
+  --changed:#43380f; --new:#123349; --arg:#2a2347;
+  --str:#f0a07a; --num:#79b0ff; --kw:#c79bff; --com:#6e7685; --fn:#5fd3c2;
+  --accent:#6d97ff; --chip:#262a33;
+}
+body.vscode-light,body.vscode-high-contrast-light{
+  --bg:#f4f5f8; --panel:#ffffff; --border:#dde1e7; --text:#1d2330; --muted:#6b7380;
+  --code-bg:#fbfbfc; --gutter:#9aa1ad;
+  --next:#fff0b8; --next-bar:#d9a400;
+  --prev:#ddf4e4; --prev-bar:#2e9e5b;
+  --err:#fde0de; --err-bar:#d93a2f;
+  --changed:#fff3c2; --new:#dcf0ff; --arg:#ece6ff;
+  --str:#a3401b; --num:#1f5fbf; --kw:#7a3fb5; --com:#8a919c; --fn:#0d7a6e;
+  --accent:#3b6fe0; --chip:#eef1f6;
+}
+body.in-vscode header{padding:6px 12px}
+body.in-vscode .layout{padding:8px}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font:14px/1.5 "Pretendard","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;display:flex;flex-direction:column}
+code,pre,.mono{font-family:"Cascadia Code","D2Coding",Consolas,"SF Mono",monospace}
+*{font-variant-ligatures:none}
+header{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--panel)}
+header h1{font-size:16px;margin:0;font-weight:700}
+header h1 span{color:var(--accent)}
+header .file{font-family:"Cascadia Code",Consolas,monospace;background:var(--chip);padding:2px 8px;border-radius:6px}
+header .meta{margin-left:auto;color:var(--muted);font-size:12px}
+.layout{flex:1;display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:12px;padding:12px;min-height:0}
+.col{display:flex;flex-direction:column;gap:12px;min-height:0}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:10px;display:flex;flex-direction:column;min-height:0}
+.panel-title{font-size:12px;font-weight:700;color:var(--muted);padding:8px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.legend{font-weight:400;display:flex;gap:10px;flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.grow{flex:1}
+/* 코드 */
+#code{overflow:auto;background:var(--code-bg);flex:1;padding:6px 0;font-family:"Cascadia Code","D2Coding",Consolas,monospace;font-size:13.5px}
+.ln{display:flex;white-space:pre;cursor:pointer;border-left:4px solid transparent;min-height:21px}
+.ln:hover{background:color-mix(in srgb,var(--accent) 7%,transparent)}
+.ln .no{width:46px;text-align:right;padding-right:6px;color:var(--gutter);user-select:none;flex:none}
+.ln .cnt{width:38px;text-align:right;padding-right:10px;color:var(--accent);font-size:11px;user-select:none;flex:none;opacity:.85}
+.ln .mark{width:18px;flex:none;text-align:center;user-select:none}
+.ln .src{padding-right:16px}
+.ln.next{background:var(--next);border-left-color:var(--next-bar)}
+.ln.prev{background:var(--prev);border-left-color:var(--prev-bar)}
+.ln.errl{background:var(--err);border-left-color:var(--err-bar)}
+.ln.cellmark{color:var(--accent);font-weight:700}
+.tk-kw{color:var(--kw);font-weight:600}.tk-str{color:var(--str)}.tk-num{color:var(--num)}.tk-com{color:var(--com);font-style:italic}.tk-fn{color:var(--fn)}
+/* 컨트롤 */
+.controls{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.btns{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+button,select{font:inherit;font-size:13px;background:var(--chip);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:5px 10px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+button:disabled{opacity:.4;cursor:default}
+#stepLabel{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--muted);font-size:13px}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.hint{font-size:11.5px;color:var(--muted)}
+kbd{font-family:inherit;font-size:11px;border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;padding:0 4px;background:var(--chip)}
+/* 설명 */
+#explain{padding:10px 14px;margin:0;list-style:none;display:flex;flex-direction:column;gap:5px;overflow:auto;max-height:45vh}
+#explain li{padding-left:2px}
+#explain .code-inline{background:var(--chip);border-radius:4px;padding:1px 6px;font-family:"Cascadia Code",Consolas,monospace;font-size:12.5px}
+#explain .bad{color:var(--err-bar);font-weight:600}
+/* 프레임/변수 */
+#frames{overflow:auto;padding:10px;display:flex;flex-direction:column;gap:10px;flex:1}
+.frame{border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.frame.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.frame-head{padding:6px 10px;background:var(--chip);font-weight:600;font-size:13px;display:flex;gap:8px;align-items:center}
+.frame-head .sub{font-weight:400;color:var(--muted);font-size:12px}
+.frame-head .ret{margin-left:auto;font-weight:500}
+.vars{width:100%;border-collapse:collapse}
+.vars td{padding:5px 10px;border-top:1px solid var(--border);vertical-align:top}
+.vars td.val{max-width:0;width:100%}
+.dfwrap{overflow:auto;max-width:100%}
+.df{border-collapse:collapse;font-family:"Cascadia Code",Consolas,monospace;font-size:12px}
+.df th,.df td{padding:2px 8px;border:1px solid var(--border);text-align:right;white-space:nowrap}
+.df th{background:var(--chip);font-weight:600}
+.df th.ix{color:var(--muted);text-align:left}
+.df .dt{font-size:9.5px;color:var(--muted);font-weight:400}
+.df td.chg{background:var(--changed)}
+.df th.newcol{background:var(--new)}
+.df td.more{text-align:left;color:var(--muted)}
+.vars td.name{width:1%;white-space:nowrap;font-family:"Cascadia Code",Consolas,monospace;font-weight:600;cursor:pointer}
+.vars td.name:hover{color:var(--accent);text-decoration:underline}
+.vars td.type{width:1%;white-space:nowrap;color:var(--muted);font-size:11.5px}
+.vars tr.changed{background:var(--changed)}
+.vars tr.new{background:var(--new)}
+.vars tr.arg{background:var(--arg)}
+.vars tr.fn td{opacity:.7}
+.was{font-size:11.5px;color:var(--muted);margin-top:2px}
+.tag{font-size:10.5px;font-weight:700;border-radius:4px;padding:0 5px;margin-left:6px;vertical-align:1px}
+.tag.new{background:var(--accent);color:#fff}.tag.chg{background:var(--next-bar);color:#000}.tag.arg{background:#8a6cf0;color:#fff}
+.empty-frame{padding:8px 10px;color:var(--muted);font-size:12.5px}
+/* 값 */
+.prim{font-family:"Cascadia Code",Consolas,monospace;white-space:pre-wrap;word-break:break-all}
+.t-str{color:var(--str)}.t-int,.t-float,.t-complex{color:var(--num)}.t-bool,.t-NoneType{color:var(--kw)}
+.func{font-family:"Cascadia Code",Consolas,monospace;color:var(--fn)}
+.badge{font-size:10.5px;color:var(--muted);border:1px solid var(--border);border-radius:10px;padding:0 5px;margin-left:4px;font-family:inherit}
+.box{display:inline-flex;flex-direction:column;border:1px solid var(--border);border-radius:6px;overflow:hidden;max-width:100%}
+.box-head{font-size:11px;color:var(--muted);padding:1px 6px;background:var(--chip)}
+.cells{display:flex;flex-wrap:wrap}
+.cell{display:flex;flex-direction:column;align-items:center;border-right:1px solid var(--border);min-width:34px}
+.cell:last-child{border-right:none}
+.cell .idx{font-size:10px;color:var(--muted);padding:0 4px;border-bottom:1px dashed var(--border);width:100%;text-align:center}
+.cell .cv{padding:2px 6px}
+.cell.chg{background:var(--changed)}
+.kv{border-collapse:collapse}
+.kv td{padding:2px 6px;border-top:1px solid var(--border);vertical-align:top}
+.kv tr:first-child td{border-top:none}
+.kv td.k{border-right:1px solid var(--border);white-space:nowrap}
+.kv td.k .prim{white-space:pre;word-break:normal}
+.frame{flex:none}
+.frames-only-changed .vars tr:not(.changed):not(.new):not(.arg){display:none}
+.toggle{font-weight:400;display:inline-flex;align-items:center;gap:4px;margin-left:auto;cursor:pointer;color:var(--text)}
+.kv tr.chg{background:var(--changed)}
+.muted{color:var(--muted)}
+/* 출력 */
+#output{margin:0;padding:10px 12px;overflow:auto;white-space:pre-wrap;word-break:break-all;font-size:13px;min-height:60px;max-height:38vh}
+#output mark{background:var(--changed);color:inherit;border-radius:2px}
+#output img.plot{display:block;max-width:100%;max-height:320px;margin:6px 0;border-radius:6px;background:#fff}
+#output mark img.plot{outline:3px solid var(--next-bar)}
+#output .errtb{color:var(--err-bar)}
+/* 히스토리 */
+#history{padding:6px 10px;overflow:auto;max-height:220px}
+#history table{width:100%;border-collapse:collapse;font-size:12.5px}
+#history td{padding:3px 6px;border-top:1px solid var(--border);cursor:pointer}
+#history tr:hover td{background:var(--chip)}
+#history tr.cur td{background:var(--next)}
+.banner{padding:8px 12px;border-radius:8px;font-size:13px}
+.banner.err{background:var(--err);border:1px solid var(--err-bar)}
+.banner.warn{background:var(--changed);border:1px solid var(--next-bar)}
+.errhelp{display:flex;flex-direction:column;gap:6px;line-height:1.55}
+.errhelp .eh-title{font-size:14.5px}
+.errhelp .eh-raw{font-size:12px;color:var(--err-bar);font-family:"Cascadia Code",Consolas,monospace}
+.errhelp .eh-sub{font-weight:700;margin-top:4px}
+.errhelp .eh-suggest{background:color-mix(in srgb,var(--panel) 70%,transparent);border-radius:6px;padding:6px 10px;font-size:14px}
+.errhelp .eh-vars{border-collapse:collapse;font-size:12.5px}
+.errhelp .eh-vars td{padding:3px 8px;border-top:1px solid color-mix(in srgb,var(--err-bar) 30%,transparent);vertical-align:top}
+.errhelp a{color:var(--accent);cursor:pointer;text-decoration:underline}
+.errhelp .eh-go{align-self:flex-start;margin-top:2px}
+@media (max-width:900px){
+  .layout{grid-template-columns:1fr;padding:8px 16px}
+  #code{max-height:50vh}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>▶ Visual <span>Code</span> Runner</h1>
+  <span class="file" id="fileName"></span>
+  <span class="meta" id="meta"></span>
+</header>
+<div class="layout">
+  <div class="col">
+    <div class="panel grow">
+      <div class="panel-title">코드
+        <span class="legend">
+          <span><i style="background:var(--prev-bar)"></i>방금 실행한 줄</span>
+          <span><i style="background:var(--next-bar)"></i>다음에 실행할 줄</span>
+          <span><b style="color:var(--accent)">×n</b> 지금까지 실행 횟수</span>
+        </span>
+      </div>
+      <div id="code"></div>
+    </div>
+    <div class="panel controls">
+      <div class="btns">
+        <button id="bFirst" title="처음 (Home)">⏮</button>
+        <button id="bPrev" title="이전 단계 (←)">◀ 이전</button>
+        <button id="bNext" class="primary" title="다음 단계 (→)">다음 ▶</button>
+        <button id="bOver" title="함수 안으로 들어가지 않고 건너뛰기 (↓)">⤼ 건너뛰기</button>
+        <button id="bOut" title="현재 함수에서 나가기 (↑)">⤴ 나가기</button>
+        <button id="bLast" title="끝 (End)">⏭</button>
+        <button id="bPlay" title="자동 재생 (Space)">⏵ 재생</button>
+        <select id="speed" title="재생 속도">
+          <option value="1000">느리게</option>
+          <option value="450" selected>보통</option>
+          <option value="150">빠르게</option>
+          <option value="40">아주 빠르게</option>
+        </select>
+        <span id="stepLabel"></span>
+      </div>
+      <input type="range" id="slider" min="0" value="0">
+      <div class="hint">코드 줄을 클릭하면 그 줄이 <b>다음에 실행되는 시점</b>으로 이동합니다 (Shift+클릭은 이전 시점). 변수 이름을 클릭하면 값이 바뀐 기록을 볼 수 있어요.
+        &nbsp;<kbd>←</kbd><kbd>→</kbd> 이동 <kbd>Space</kbd> 재생</div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">이번 단계에서 일어난 일</div>
+      <ul id="explain"></ul>
+    </div>
+  </div>
+  <div class="col">
+    <div class="panel grow">
+      <div class="panel-title">변수 &amp; 호출 스택
+        <span class="legend">
+          <span><i style="background:var(--new)"></i>새로 생김</span>
+          <span><i style="background:var(--changed)"></i>값 바뀜</span>
+          <span><i style="background:var(--arg)"></i>함수 인자</span>
+          <span><span class="badge">#1</span> 같은 번호 = 같은 객체</span>
+        </span>
+        <label class="toggle"><input type="checkbox" id="onlyChanged"> 바뀐 것만 보기</label>
+      </div>
+      <div id="frames"></div>
+    </div>
+    <div class="panel" id="historyPanel" hidden>
+      <div class="panel-title"><span id="historyTitle"></span><button id="historyClose" style="margin-left:auto;padding:0 8px">닫기</button></div>
+      <div id="history"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">출력 (print)<span class="legend"><span><mark style="background:var(--changed);color:inherit">노란색</mark> = 이번 단계에서 출력됨</span></span></div>
+      <pre id="output"></pre>
+    </div>
+  </div>
+</div>
+<script>
+const TRACE = /*__TRACE_DATA__*/null;
+(function(){
+"use strict";
+const $ = id => document.getElementById(id);
+const steps = TRACE.steps;
+const N = steps.length;
+// 같은 값은 values 에 한 번만 저장되어 있음 → 변수마다 실제 값으로 펼친다
+if (TRACE.values) for (const s of steps) for (const f of s.stack) f.vars = f.vars.map(([n, i]) => [n, TRACE.values[i]]);
+const IMAGES = TRACE.images || [];
+const IMG_RE = /\u0000img:(\d+)\u0000/g;
+const outHtml = text => esc(text).replace(IMG_RE, (_, i) => IMAGES[+i] ? `<img class="plot" src="data:image/png;base64,${IMAGES[+i]}" alt="그래프 ${+i + 1}">` : "");
+const outPlain = text => text.replace(IMG_RE, "📈[그래프]");
+const srcLines = TRACE.source.replace(/\r\n/g,"\n").split("\n");
+if (srcLines.length && srcLines[srcLines.length-1]==="") srcLines.pop();
+let cur = 0, timer = null, historyKey = null;
+const vscodeApi = typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : null;
+if (vscodeApi) {
+  document.body.classList.add("in-vscode");
+  window.addEventListener("message", e => {
+    const m = e.data || {};
+    if (m.type === "jumpToLine") jumpToLine(m.line, !!m.back);
+    else if (m.type === "go") go(m.step);
+    else if (m.type === "goError") { if (errStep >= 0) go(errStep); else go(N - 1); }
+    else if (m.type === "key" && m.key === "next") go(cur + 1);
+    else if (m.type === "key" && m.key === "prev") go(cur - 1);
+  });
+}
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const J = v => JSON.stringify(v);
+
+/* ---------- 객체 번호(#1, #2 ...) : 별칭(aliasing) 확인용 ---------- */
+const idNo = new Map();
+function badge(id){
+  if (id === undefined) return "";
+  if (!idNo.has(id)) idNo.set(id, idNo.size + 1);
+  return `<span class="badge" title="같은 번호면 메모리상 같은 객체입니다">#${idNo.get(id)}</span>`;
+}
+// 등장 순서대로 번호를 미리 매겨 두어 단계를 오가도 번호가 바뀌지 않게
+(function prenumber(){
+  const walk = v => {
+    if (!v || typeof v !== "object") return;
+    if (v.id !== undefined && ["seq","map","obj","df","series"].includes(v.k)) badge(v.id);
+    if (v.items) v.items.forEach(it => Array.isArray(it) ? it.forEach(walk) : walk(it));
+    if (v.attrs) v.attrs.forEach(a => walk(a[1]));
+  };
+  for (const s of steps) for (const f of s.stack) for (const [,v] of f.vars) walk(v);
+})();
+
+/* ---------- 값 -> 짧은 텍스트 ---------- */
+const BR = {list:["[","]"], tuple:["(",")"], set:["{","}"], frozenset:["frozenset({","})"], deque:["deque([","])"]};
+function toText(v, max=70){
+  const t = (()=>{
+    switch(v.k){
+      case "prim": case "more": return v.r;
+      case "func": return "ƒ " + v.r;
+      case "type": return "class " + v.r;
+      case "module": return "module " + v.r;
+      case "ref": return "…(순환)";
+      case "seq": { const [a,b] = BR[v.t] || [v.t+"([","])"];
+        if (v.t==="set" && v.len===0) return "set()";
+        return a + v.items.map(x=>toText(x,30)).join(", ") + (v.len>v.items.length?", …":"") + (v.t==="tuple"&&v.len===1?",":"") + b; }
+      case "map": return "{" + v.items.map(([k,x])=>toText(k,20)+": "+toText(x,30)).join(", ") + (v.len>v.items.length?", …":"") + "}";
+      case "obj": return v.t + "(" + v.attrs.map(([k,x])=>k+"="+toText(x,25)).join(", ") + ")";
+      case "df": return v.t === "DataFrame"
+        ? `DataFrame ${v.shape[0]}행×${v.shape[1]}열 [${v.cols.join(", ")}]`
+        : `${v.t} ${v.shape[0]}×${v.shape[1]} [[${v.rows[0] ? v.rows[0].slice(0, 4).join(", ") : ""}…], …]`;
+      case "series": return `Series${v.name ? " '" + v.name + "'" : ""} ${v.len}개 [${v.values.slice(0,5).join(", ")}${v.len > 5 ? ", …" : ""}]`;
+    }
+    return "?";
+  })();
+  return t.length > max ? t.slice(0, max-1) + "…" : t;
+}
+
+/* ---------- 값 -> 시각화 HTML (이전 값과 비교해 바뀐 칸 강조) ---------- */
+function renderVal(v, p){
+  switch(v.k){
+    case "prim": return `<span class="prim t-${esc(v.t)}">${esc(v.r)}</span>`;
+    case "more": return `<span class="prim">${esc(v.r)}</span>${badge(v.id)}`;
+    case "func": return `<span class="func">ƒ ${esc(v.r)}</span>`;
+    case "type": return `<span class="func">class ${esc(v.r)}</span>`;
+    case "module": return `<span class="muted">module ${esc(v.r)}</span>`;
+    case "ref": return `<span class="muted">↻ 자기 자신 참조</span>${badge(v.id)}`;
+    case "seq": {
+      const pp = p && p.k==="seq" ? p : null;
+      const head = `<div class="box-head">${esc(v.t)}${badge(v.id)} · 길이 ${v.len}</div>`;
+      if (!v.len) return `<div class="box">${head}<div class="cells"><div class="cell"><div class="cv muted">비어 있음</div></div></div></div>`;
+      const isSet = v.t==="set"||v.t==="frozenset";
+      const cells = v.items.map((it,i)=>{
+        const pi = pp ? pp.items[i] : undefined;
+        const chg = pp && (pi===undefined || J(pi)!==J(it));
+        return `<div class="cell ${chg?"chg":""}"><div class="idx">${isSet?"":i}</div><div class="cv">${renderVal(it,pi)}</div></div>`;
+      }).join("");
+      const more = v.len>v.items.length ? `<div class="cell"><div class="idx"></div><div class="cv muted">…외 ${v.len-v.items.length}개</div></div>` : "";
+      return `<div class="box">${head}<div class="cells">${cells}${more}</div></div>`;
+    }
+    case "map": {
+      const pm = p && p.k==="map" ? new Map(p.items.map(([k,x])=>[J(k),x])) : null;
+      const head = `<div class="box-head">${esc(v.t)}${badge(v.id)} · ${v.len}개</div>`;
+      if (!v.len) return `<div class="box">${head}<div class="cv muted" style="padding:2px 6px">비어 있음</div></div>`;
+      const rows = v.items.map(([k,x])=>{
+        const px = pm ? pm.get(J(k)) : undefined;
+        const chg = pm && (px===undefined || J(px)!==J(x));
+        return `<tr class="${chg?"chg":""}"><td class="k">${renderVal(k)}</td><td>${renderVal(x,px)}</td></tr>`;
+      }).join("");
+      return `<div class="box">${head}<table class="kv">${rows}</table></div>`;
+    }
+    case "obj": {
+      const pm = p && p.k==="obj" ? new Map(p.attrs) : null;
+      const head = `<div class="box-head">${esc(v.t)} 객체${badge(v.id)}</div>`;
+      if (!v.attrs.length) return `<div class="box">${head}</div>`;
+      const rows = v.attrs.map(([k,x])=>{
+        const px = pm ? pm.get(k) : undefined;
+        const chg = pm && (px===undefined || J(px)!==J(x));
+        return `<tr class="${chg?"chg":""}"><td class="k mono">.${esc(k)}</td><td>${renderVal(x,px)}</td></tr>`;
+      }).join("");
+      return `<div class="box">${head}<table class="kv">${rows}</table></div>`;
+    }
+    case "df": {
+      const pd = p && p.k==="df" ? p : null;
+      const pcol = pd ? new Map(pd.cols.map((c,j)=>[c,j])) : null;
+      const prow = pd ? new Map(pd.index.map((r,i)=>[r,i])) : null;
+      const head = `<div class="box-head">${esc(v.t)}${badge(v.id)} · ${v.shape[0]}행 × ${v.shape[1]}열</div>`;
+      const extraCol = v.shape[1] > v.cols.length ? `<th>… +${v.shape[1]-v.cols.length}열</th>` : "";
+      const th = `<tr><th class="ix">${esc(v.index_name)}</th>${v.cols.map((c,j)=>`<th class="${pcol && !pcol.has(c) ? "newcol" : ""}">${esc(c)}<div class="dt">${esc(v.dtypes[j])}</div></th>`).join("")}${extraCol}</tr>`;
+      const body = v.rows.map((row,i)=>{
+        const pi = prow ? prow.get(v.index[i]) : undefined;
+        return `<tr><th class="ix">${esc(v.index[i])}</th>${row.map((x,j)=>{
+          let chg = false;
+          if (pd) { const pj = pcol.get(v.cols[j]); chg = pi === undefined || pj === undefined || pd.rows[pi][pj] !== x; }
+          return `<td class="${chg ? "chg" : ""}">${esc(x)}</td>`;
+        }).join("")}${extraCol ? "<td></td>" : ""}</tr>`;
+      }).join("");
+      const more = v.shape[0] > v.rows.length ? `<tr><td class="more" colspan="${v.cols.length+2}">… ${v.shape[0]-v.rows.length}행 더 있음</td></tr>` : "";
+      return `<div class="box">${head}<div class="dfwrap"><table class="df">${th}${body}${more}</table></div></div>`;
+    }
+    case "series": {
+      const ps2 = p && p.k==="series" ? new Map(p.index.map((r,i)=>[r,p.values[i]])) : null;
+      const head = `<div class="box-head">Series${v.name ? " '" + esc(v.name) + "'" : ""}${badge(v.id)} · ${v.len}개 · ${esc(v.dtype)}</div>`;
+      const body = v.values.map((x,i)=>{
+        const chg = ps2 && ps2.get(v.index[i]) !== x;
+        return `<tr><th class="ix">${esc(v.index[i])}</th><td class="${chg ? "chg" : ""}">${esc(x)}</td></tr>`;
+      }).join("");
+      const more = v.len > v.values.length ? `<tr><td class="more" colspan="2">… ${v.len-v.values.length}개 더</td></tr>` : "";
+      return `<div class="box">${head}<div class="dfwrap"><table class="df">${body}${more}</table></div></div>`;
+    }
+  }
+  return esc(J(v));
+}
+
+/* ---------- 코드 하이라이트 ---------- */
+const KW = new Set("def class return if elif else for while in not and or import from as with try except finally raise lambda pass break continue yield global nonlocal True False None is del assert async await match case".split(" "));
+const TOK = /(#.*$)|([rbfuRBFU]{0,2}(?:"""|'''|"(?:\\.|[^"\\])*"?|'(?:\\.|[^'\\])*'?))|(\b\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?\b)|([A-Za-z_\uAC00-\uD7A3][\w\uAC00-\uD7A3]*)(\s*\()?/g;
+function highlight(line){
+  let out = "", last = 0, m;
+  TOK.lastIndex = 0;
+  while ((m = TOK.exec(line))){
+    out += esc(line.slice(last, m.index));
+    if (m[1]) out += `<span class="tk-com">${esc(m[1])}</span>`;
+    else if (m[2]) out += `<span class="tk-str">${esc(m[2])}</span>`;
+    else if (m[3]) out += `<span class="tk-num">${esc(m[3])}</span>`;
+    else if (m[4]) {
+      if (KW.has(m[4])) out += `<span class="tk-kw">${esc(m[4])}</span>` + esc(m[5]||"");
+      else if (m[5]) out += `<span class="tk-fn">${esc(m[4])}</span>` + esc(m[5]);
+      else out += esc(m[4]);
+    }
+    last = TOK.lastIndex;
+    if (m[0] === "") TOK.lastIndex++;
+  }
+  return out + esc(line.slice(last));
+}
+
+/* ---------- 코드 패널 구성 ---------- */
+const codeEl = $("code");
+const lineEls = [];
+srcLines.forEach((text, i) => {
+  const no = i + 1;
+  const d = document.createElement("div");
+  d.className = "ln" + (/^# ═+ \[셀 \d+\]/.test(text) ? " cellmark" : "");
+  d.innerHTML = `<span class="mark"></span><span class="no">${no}</span><span class="cnt"></span><span class="src">${highlight(text) || " "}</span>`;
+  d.addEventListener("click", ev => jumpToLine(no, ev.shiftKey));
+  d.title = "클릭: 이 줄이 다음에 실행되는 시점으로 이동";
+  codeEl.appendChild(d);
+  lineEls.push(d);
+});
+
+/* 줄별 누적 실행 횟수 계산용 */
+const execLineOfStep = steps.map(s => s.event === "line" ? s.line : null);
+
+/* ---------- 단계별 변경 계산 ---------- */
+function diffAt(i){
+  const s = steps[i], ps = i > 0 ? steps[i-1] : null;
+  const pf = new Map(ps ? ps.stack.map(f=>[f.fid,f]) : []);
+  const res = new Map();
+  for (const f of s.stack){
+    const prevF = pf.get(f.fid);
+    const pv = new Map(prevF ? prevF.vars : []);
+    const vars = new Map();
+    for (const [name, val] of f.vars){
+      if (!prevF) vars.set(name, {kind: f.name==="<module>" ? "new" : "arg"});
+      else if (!pv.has(name)) vars.set(name, {kind:"new"});
+      else if (J(pv.get(name)) !== J(val)) vars.set(name, {kind:"changed", prev: pv.get(name)});
+    }
+    const deleted = prevF ? [...pv.keys()].filter(k => !f.vars.some(([n]) => n === k)) : [];
+    res.set(f.fid, {vars, newFrame: !prevF, deleted});
+  }
+  return res;
+}
+
+function frameTitle(f){
+  return f.name === "<module>" ? "전역 (global)" : `함수 ${f.name}()`;
+}
+
+/* ---------- 렌더링 ---------- */
+function render(){
+  const s = steps[cur];
+  const ps = cur > 0 ? steps[cur-1] : null;
+  const isLast = cur === N - 1;
+  const diffs = diffAt(cur);
+
+  // 코드 하이라이트
+  const counts = new Map();
+  for (let i = 0; i <= cur; i++){ const l = execLineOfStep[i]; if (l !== null && i < cur) counts.set(l, (counts.get(l)||0) + 1); }
+  lineEls.forEach((el, i) => {
+    el.classList.remove("next","prev","errl");
+    el.querySelector(".mark").textContent = "";
+    const c = counts.get(i+1);
+    el.querySelector(".cnt").textContent = c ? "×" + c : "";
+  });
+  const prevLine = ps ? ps.line : null;
+  const nextLine = (s.event === "line" || s.event === "call") ? s.line : null;
+  const errLine = (isLast || cur === errStep) && TRACE.error ? TRACE.error.line : null;
+  if (prevLine && lineEls[prevLine-1]) { lineEls[prevLine-1].classList.add("prev"); lineEls[prevLine-1].querySelector(".mark").textContent = "✓"; }
+  if (nextLine && lineEls[nextLine-1]) { lineEls[nextLine-1].classList.remove("prev"); lineEls[nextLine-1].classList.add("next"); lineEls[nextLine-1].querySelector(".mark").textContent = "➜"; }
+  if (s.event === "return" && lineEls[s.line-1]) { lineEls[s.line-1].classList.add("prev"); lineEls[s.line-1].querySelector(".mark").textContent = "↩"; }
+  if (errLine && lineEls[errLine-1]) { const e = lineEls[errLine-1]; e.classList.remove("next","prev"); e.classList.add("errl"); e.querySelector(".mark").textContent = "✖"; }
+  scrollCodeTo(nextLine || prevLine || s.line);
+
+  // 컨트롤
+  $("slider").value = cur;
+  $("stepLabel").textContent = `단계 ${cur+1} / ${N}`;
+  $("bPrev").disabled = $("bFirst").disabled = cur === 0;
+  $("bNext").disabled = $("bLast").disabled = $("bOver").disabled = $("bOut").disabled = isLast;
+
+  // 프레임/변수
+  // 지금 실행 중인 프레임을 맨 위에, 호출한 쪽은 아래에
+  const fr = s.stack.map((f, idx) => [f, idx]).reverse().map(([f, idx]) => {
+    const d = diffs.get(f.fid);
+    const active = idx === s.stack.length - 1;
+    let ret = "";
+    if (active && s.event === "return" && s.ret && f.name !== "<module>") ret =`<span class="ret">반환값 → ${renderVal(s.ret)}</span>`;
+    if (active && s.event === "return" && s.unwind) ret = `<span class="ret" style="color:var(--err-bar)">예외로 중단됨</span>`;
+    const rows = f.vars.map(([name, val]) => {
+      const info = d.vars.get(name);
+      const kind = info ? info.kind : "";
+      const isFn = val.k === "func" || val.k === "type";
+      const tag = kind === "new" ? `<span class="tag new">NEW</span>` : kind === "changed" ? `<span class="tag chg">변경</span>` : kind === "arg" ? `<span class="tag arg">인자</span>` : "";
+      const was = kind === "changed" ? `<div class="was">이전: <span class="mono">${esc(toText(info.prev, 90))}</span>${sameObj(info.prev,val) ? " · 같은 객체가 수정됨" : ""}</div>` : "";
+      return `<tr class="${kind === "changed" ? "changed" : kind}${isFn ? " fn" : ""}">
+        <td class="name" data-fid="${f.fid}" data-name="${esc(name)}" data-fname="${esc(f.name)}" title="클릭: 값 변화 기록 보기">${esc(name)}${tag}</td>
+        <td class="type">${esc(typeName(val))}</td>
+        <td class="val">${renderVal(val, info && info.prev)}${was}</td></tr>`;
+    }).join("");
+    return `<div class="frame ${active ? "active" : ""}">
+      <div class="frame-head">${idx > 0 ? `<span class="muted">${idx}단계 깊이</span> ` : ""}${esc(frameTitle(f))}<span class="sub">${active ? "← 지금 실행 중" : `${f.line}번 줄에서 호출하고 기다리는 중`}</span>${ret}</div>
+      ${rows ? `<table class="vars">${rows}</table>` : `<div class="empty-frame">아직 변수가 없습니다</div>`}
+    </div>`;
+  }).join("");
+  const framesEl = $("frames");
+  framesEl.innerHTML = fr || `<div class="empty-frame">실행 전</div>`;
+  const firstChange = framesEl.querySelector("tr.changed, tr.new, tr.arg");
+  if (firstChange) {
+    const r = firstChange.getBoundingClientRect(), c = framesEl.getBoundingClientRect();
+    if (r.top < c.top || r.bottom > c.bottom) framesEl.scrollTop += r.top - c.top - 40;
+  } else if (s.stack.length > 1) framesEl.scrollTop = 0;
+
+  // 출력
+  const end = isLast ? TRACE.output.length : s.out;
+  const start = ps ? Math.min(ps.out, end) : 0;
+  let outText = outHtml(TRACE.output.slice(0, start)) + (end > start ? `<mark>${outHtml(TRACE.output.slice(start, end))}</mark>` : "");
+  if (isLast && TRACE.error) outText += `<span class="errtb">${esc(TRACE.error.tb)}</span>`;
+  $("output").innerHTML = outText || `<span class="muted">(아직 출력 없음)</span>`;
+  $("output").scrollTop = $("output").scrollHeight;
+
+  // 설명
+  $("explain").innerHTML = explain(s, ps, diffs, isLast).map(x => `<li>${x}</li>`).join("");
+
+  if (historyKey) renderHistory();
+
+  // VS Code 확장에 현재 위치 알림 → 에디터에 줄 강조 + 인라인 변화 표시
+  if (vscodeApi) {
+    vscodeApi.setState({step: cur, file: TRACE.path});
+    vscodeApi.postMessage({
+      type: "step", step: cur, total: N,
+      next: nextLine, prev: (s.event === "return" ? s.line : prevLine), err: errLine,
+      notes: inlineNotes(s, ps, diffs),
+    });
+  }
+}
+
+/* 에디터 줄 끝에 붙일 짧은 변화 요약 */
+function inlineNotes(s, ps, diffs){
+  const notes = [];
+  for (const f of s.stack){
+    const d = diffs.get(f.fid);
+    if (!d) continue;
+    for (const [name, info] of d.vars){
+      const v = f.vars.find(([n]) => n === name)[1];
+      if (v.k === "func" || v.k === "type") continue;
+      if (info.kind === "changed") notes.push(`${name}: ${toText(info.prev, 25)} → ${toText(v, 30)}`);
+      else notes.push(`${name} = ${toText(v, 30)}`);
+    }
+  }
+  if (s.event === "return" && s.ret && s.func !== "<module>") notes.push(`return ${toText(s.ret, 30)}`);
+  if (s.event === "exception") notes.push(`⚠ ${s.exc}`);
+  return notes.slice(0, 5);
+}
+
+function typeName(v){
+  if (v.k === "func") return "함수";
+  if (v.k === "type") return "클래스";
+  return v.t;
+}
+function sameObj(a, b){ return a && b && a.id !== undefined && a.id === b.id; }
+function codeOf(line){ return line && srcLines[line-1] !== undefined ? `<span class="code-inline">${esc(srcLines[line-1].trim())}</span>` : ""; }
+
+function explain(s, ps, diffs, isLast){
+  const out = [];
+  if (!ps) out.push("🚀 프로그램 시작");
+  if (ps && ps.event === "line") out.push(`✓ 방금 실행: <b>${ps.line}번 줄</b> ${codeOf(ps.line)}`);
+  if (ps && ps.event === "call" && ps.func !== "<module>") out.push(`🚪 <b>${esc(ps.func)}()</b> 함수 안으로 들어왔습니다`);
+  if (ps && ps.event === "return" && ps.func !== "<module>" && s.event !== "return") out.push(`🔙 <b>${esc(ps.func)}()</b> 에서 돌아와 호출한 곳(${s.line}번 줄)으로 복귀`);
+
+  if (s.event === "call") {
+    const f = s.stack[s.stack.length-1];
+    if (f.name !== "<module>") {
+      const args = f.vars.map(([n,v]) => `${esc(n)}=${esc(toText(v,30))}`).join(", ");
+      out.push(`📞 <b>${esc(f.name)}(${args})</b> 호출 → 새 프레임(지역 변수 공간)이 만들어짐`);
+    }
+  }
+  for (const f of s.stack){
+    const d = diffs.get(f.fid);
+    if (!d || d.newFrame) continue;
+    const where = f.name === "<module>" ? "" : ` <span class="muted">(${esc(f.name)} 안)</span>`;
+    for (const [name, info] of d.vars){
+      const v = f.vars.find(([n]) => n === name)[1];
+      if (info.kind === "new") {
+        if (v.k === "func") out.push(`🧩 함수 <b>${esc(name)}</b> 정의됨${where}`);
+        else if (v.k === "type") out.push(`🧩 클래스 <b>${esc(name)}</b> 정의됨${where}`);
+        else out.push(`✨ 새 변수 <b>${esc(name)}</b> = <span class="code-inline">${esc(toText(v))}</span>${where}`);
+      } else if (info.kind === "changed") {
+        let how = sameObj(info.prev, v) ? "내용이 바뀜 (같은 객체를 직접 수정)" : "값이 바뀜";
+        if (v.k === "df" && info.prev.k === "df") {
+          const added = v.cols.filter(c => !info.prev.cols.includes(c));
+          const removed = info.prev.cols.filter(c => !v.cols.includes(c));
+          if (added.length) how += ` — <b>새 열: ${esc(added.join(", "))}</b>`;
+          if (removed.length) how += ` — 사라진 열: ${esc(removed.join(", "))}`;
+          if (v.shape[0] !== info.prev.shape[0]) how += ` — 행 ${info.prev.shape[0]} → ${v.shape[0]}`;
+        }
+        out.push(`✏️ <b>${esc(name)}</b> ${how}: <span class="code-inline">${esc(toText(info.prev,40))}</span> → <span class="code-inline">${esc(toText(v,40))}</span>${where}`);
+      }
+    }
+    for (const name of d.deleted) out.push(`🗑 <b>${esc(name)}</b> 삭제됨 / 사라짐${where}`);
+  }
+  if (s.event === "return") {
+    const name = s.func === "<module>" ? null : s.func;
+    if (name && s.ret) out.push(`↩ <b>${esc(name)}()</b> 가 <span class="code-inline">${esc(toText(s.ret))}</span> 을(를) 반환하고 끝남 → 지역 변수 사라짐`);
+    else if (name && s.unwind) out.push(`<span class="bad">↩ ${esc(name)}() 가 예외 때문에 중단됨</span>`);
+  }
+  if (s.event === "exception") out.push(`<span class="bad">⚠ 예외 발생: ${esc(s.exc)}</span> (${s.line}번 줄)`);
+  if (cur === errStep && !isLast) out.push(errorHelp());
+  if (ps && s.out > ps.out) {
+    const newOut = TRACE.output.slice(ps.out, s.out);
+    if (IMG_RE.test(newOut)) out.push("📈 그래프가 그려졌어요 (오른쪽 아래 출력 칸)");
+    IMG_RE.lastIndex = 0;
+    const txt = newOut.replace(IMG_RE, "").replace(/\n$/, "");
+    if (txt.trim()) out.push(`🖨 출력: <span class="code-inline">${esc(txt.length > 300 ? txt.slice(0, 300) + "…" : txt)}</span>`);
+  }
+  if (s.event === "line") out.push(`➜ 다음에 실행할 줄: <b>${s.line}번</b> ${codeOf(s.line)}`);
+
+  if (isLast) {
+    if (TRACE.error) out.push(errorHelp());
+    else if (TRACE.truncated) out.push(`<div class="banner warn">⏸ 최대 ${TRACE.max_steps}단계까지만 기록했습니다. 무한 루프일 수 있어요. (늘리려면 <span class="code-inline">--max-steps 10000</span>)</div>`);
+    else out.push("🏁 프로그램 정상 종료");
+  }
+  return out;
+}
+
+/* ---------- 오류 도우미 ---------- */
+const ERR = TRACE.error;
+// 끝에서부터 exception/return 이 이어지는 구간의 맨 앞 exception = 오류가 처음 난 순간
+let errStep = -1;
+if (ERR) for (let j = N - 1; j >= 0; j--) {
+  const e = steps[j].event;
+  if (e === "exception") errStep = j;
+  else if (e !== "return") break;
+}
+const md = s => esc(s || "").replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, '<span class="code-inline">$1</span>');
+
+function lev(a, b){
+  const d = Array.from({length: a.length + 1}, (_, i) => [i]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++)
+    d[i][j] = Math.min(d[i-1][j] + 1, d[i][j-1] + 1, d[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+  return d[a.length][b.length];
+}
+function closest(word, cands){
+  let best = null, bd = Infinity;
+  for (const c of cands){ if (c === word) continue; const x = lev(word, c); if (x < bd){ bd = x; best = c; } }
+  return best !== null && bd <= Math.max(2, Math.floor(word.length / 3)) ? best : null;
+}
+const unq = s => String(s).replace(/^(['"])(.*)\1$/, "$2");
+
+// 변수 name 이 지금 값이 된 시점을 찾아 링크로
+function whereSet(fid, name, upto){
+  const valAt = j => {
+    const f = steps[j].stack.find(f => f.fid === fid);
+    if (!f) return undefined;
+    const e = f.vars.find(([k]) => k === name);
+    return e ? J(e[1]) : null;
+  };
+  const now = valAt(upto);
+  let j = upto;
+  while (j > 0 && valAt(j - 1) === now) j--;
+  if (j === 0) return "";
+  if (valAt(j - 1) === undefined) return `<a data-go="${j}">함수 인자로 들어옴 (${steps[j-1].line}번 줄에서 호출)</a>`;
+  // 값을 바꾼 줄 = 같은 프레임에서 마지막으로 실행된 줄 (중간에 다른 함수 호출이 끼어 있을 수 있음)
+  let k = j - 1;
+  while (k > 0 && !(steps[k].fid === fid && steps[k].event === "line")) k--;
+  return `<a data-go="${j}">${steps[k].line}번 줄에서 이 값이 됨</a>`;
+}
+
+function errorContext(){
+  const s = steps[errStep];
+  const raw = (srcLines[ERR.line - 1] || "").replace(/(["'])(?:\\.|(?!\1).)*\1/g, " ").replace(/#.*$/, "");
+  const names = [...new Set(raw.match(/[A-Za-z_가-힣][\w가-힣]*/g) || [])].filter(n => !KW.has(n));
+  const frames = [...s.stack].reverse();
+  const found = [];
+  for (const n of names) for (const f of frames) {
+    const e = f.vars.find(([k]) => k === n);
+    if (e) { found.push({name: n, val: e[1], fid: f.fid}); break; }
+  }
+  const data = found.filter(it => !["func", "type", "module"].includes(it.val.k));
+  const rows = data.map(it => {
+    const v = it.val;
+    const size = (v.k === "seq" || v.k === "map") ? ` <span class="muted">(길이 ${v.len})</span>`
+      : v.k === "df" ? ` <span class="muted">(${v.shape[0]}행 × ${v.shape[1]}열)</span>` : "";
+    return `<tr><td class="mono"><b>${esc(it.name)}</b></td><td class="muted">${esc(typeName(v))}</td>
+      <td class="mono">${esc(toText(v, 60))}${size}</td><td>${whereSet(it.fid, it.name, errStep)}</td></tr>`;
+  });
+
+  // 오류 종류별 맞춤 힌트
+  const tips = [];
+  if (ERR.type === "KeyError") {
+    const key = unq(ERR.msg);
+    let cands = [];
+    for (const it of data) {
+      if (it.val.k === "map") cands.push(...it.val.items.map(([k]) => unq(toText(k))));
+      if (it.val.k === "df") cands.push(...it.val.cols);
+    }
+    if (cands.length) {
+      const c = closest(key, cands);
+      tips.push(`찾은 키 <span class="code-inline">${esc(key)}</span> 는 없어요. 있는 키: ${cands.slice(0, 12).map(x => `<span class="code-inline">${esc(x)}</span>`).join(" ")}`
+        + (c ? `<br>👉 혹시 <b class="code-inline">${esc(c)}</b> 을(를) 쓰려던 건가요?` : ""));
+    }
+  }
+  if ((ERR.type === "NameError" || ERR.type === "UnboundLocalError") && !(ERR.suggest && ERR.suggest.options.length)) {
+    const m = /'([^']+)'/.exec(ERR.msg);
+    if (m) {
+      const all = new Set();
+      for (const f of s.stack) for (const [k] of f.vars) all.add(k);
+      const c = closest(m[1], [...all]);
+      if (c) tips.push(`👉 혹시 <b class="code-inline">${esc(c)}</b> 을(를) 쓰려던 건가요? (지금 있는 이름: ${[...all].slice(0, 10).map(esc).join(", ")})`);
+    }
+  }
+  if (ERR.type === "IndexError") {
+    for (const it of data) if (it.val.k === "seq") {
+      tips.push(it.val.len === 0
+        ? `👉 <b>${esc(it.name)}</b> 는 <b>비어 있는</b> ${esc(it.val.t)} 예요. 꺼낼 원소가 하나도 없어요.`
+        : `👉 <b>${esc(it.name)}</b> 의 길이는 ${it.val.len} 이라서 쓸 수 있는 위치는 <b>0 ~ ${it.val.len - 1}</b> 이에요.`);
+    }
+  }
+  if (ERR.type === "ZeroDivisionError") {
+    const zeros = data.filter(it => it.val.k === "prim" && /^-?0(\.0+)?$/.test(it.val.r));
+    if (zeros.length) tips.push(`👉 값이 0인 변수: ${zeros.map(z => `<b>${esc(z.name)}</b>`).join(", ")}`);
+  }
+  const nones = data.filter(it => it.val.t === "NoneType");
+  if (nones.length) tips.push(`👉 None 이 들어 있는 변수: ${nones.map(z => `<b>${esc(z.name)}</b>`).join(", ")} — 오른쪽 링크로 None 이 된 곳을 확인하세요.`);
+  return {rows, tips};
+}
+
+// 파이썬 쪽에서 찾아 준 "잘못 쓴 이름 → 비슷한 이름" 추천
+function suggestHtml(sg){
+  if (!sg) return "";
+  const c = s => `<span class="code-inline">${esc(s)}</span>`;
+  const opts = (sg.options || []).map(o => `<b>${c(o)}</b>`).join(" 또는 ");
+  const maybe = opts ? ` 👉 혹시 ${opts} 을(를) 쓰려던 건가요?` : "";
+  switch (sg.kind) {
+    case "attr": return `🔤 <b>${esc(sg.owner)}</b> 에는 ${c(sg.wrong)} 라는 기능(속성/메서드)이 없어요.${maybe}`;
+    case "name": return opts ? `🔤 ${c(sg.wrong)} 라는 이름은 없어요.${maybe}` : "";
+    case "import": return `🔤 <b>${esc(sg.owner)}</b> 안에 ${c(sg.wrong)} 가 없어요.${maybe}`;
+    case "module": return opts
+      ? `📦 ${c(sg.wrong)} 라는 모듈은 없어요.${maybe}`
+      : `📦 ${c(sg.wrong)} 모듈이 설치되어 있지 않아요. 터미널에서 ${c("pip install " + sg.pip)} 로 설치하세요.`;
+    case "kwarg": return `🔤 <b>${esc(sg.owner)}()</b> 에는 ${c(sg.wrong)} 라는 인자가 없어요.${maybe}`
+      + (sg.params && sg.params.length ? `<br><span class="muted">받을 수 있는 인자: ${sg.params.map(esc).join(", ")}</span>` : "");
+  }
+  return "";
+}
+
+function errorHelp(){
+  const h = ERR.hint || {title: `${ERR.type} 오류`, why: "", fix: ""};
+  let html = `<div class="banner err errhelp">
+    <div class="eh-title">❌ <b>${esc(h.title)}</b>${ERR.line ? ` <span class="muted">— ${ERR.line}번 줄</span>` : ""}</div>
+    <div class="eh-raw">${esc(ERR.type)}: ${esc(ERR.msg)}</div>
+    <div><b>왜 났나요?</b> ${md(h.why)}</div>
+    <div><b>어떻게 고치나요?</b> ${md(h.fix)}</div>`;
+  const sg = suggestHtml(ERR.suggest);
+  if (sg) html += `<div class="eh-suggest">${sg}</div>`;
+  if (errStep >= 0) {
+    const ctx = errorContext();
+    if (ctx.rows.length) html += `<div class="eh-sub">🔎 오류가 난 순간, 이 줄에 쓰인 값</div><table class="eh-vars">${ctx.rows.join("")}</table>`;
+    for (const t of ctx.tips) html += `<div>${t}</div>`;
+    if (cur !== errStep) html += `<button class="eh-go" data-go="${errStep}">⏪ 오류가 난 순간으로 이동 (단계 ${errStep + 1})</button>`;
+  }
+  return html + `</div>`;
+}
+$("explain").addEventListener("click", ev => {
+  const a = ev.target.closest("[data-go]");
+  if (a) go(+a.dataset.go);
+});
+
+/* ---------- 변수 히스토리 ---------- */
+function renderHistory(){
+  const {fid, name, fname} = historyKey;
+  const rows = [];
+  let prev;
+  for (let i = 0; i < N; i++){
+    const f = steps[i].stack.find(f => f.fid === fid);
+    if (!f) continue;
+    const e = f.vars.find(([n]) => n === name);
+    const v = e ? e[1] : null;
+    const key = v ? J(v) : null;
+    if (key !== prev) {
+      rows.push({i, line: i > 0 ? steps[i-1].line : steps[i].line, text: v ? toText(v, 80) : "(없음)"});
+      prev = key;
+    }
+  }
+  let curRow = -1;
+  rows.forEach((r, k) => { if (r.i <= cur) curRow = k; });
+  $("historyTitle").textContent = `변수 기록: ${name}  (${fname === "<module>" ? "전역" : fname + "()"}) — ${rows.length}번 바뀜`;
+  $("history").innerHTML = `<table>${rows.map((r, k) => `<tr data-step="${r.i}" class="${k === curRow ? "cur" : ""}"><td class="muted">단계 ${r.i+1}</td><td class="muted">${r.line}번 줄</td><td class="mono">${esc(r.text)}</td></tr>`).join("")}</table>`;
+  $("historyPanel").hidden = false;
+}
+$("frames").addEventListener("click", ev => {
+  const td = ev.target.closest("td.name");
+  if (!td) return;
+  historyKey = {fid: +td.dataset.fid, name: td.dataset.name, fname: td.dataset.fname};
+  renderHistory();
+});
+$("history").addEventListener("click", ev => { const tr = ev.target.closest("tr[data-step]"); if (tr) go(+tr.dataset.step); });
+$("historyClose").onclick = () => { historyKey = null; $("historyPanel").hidden = true; };
+
+/* ---------- 이동 ---------- */
+function go(i){
+  cur = Math.max(0, Math.min(N - 1, i));
+  render();
+  try { history.replaceState(null, "", "#step=" + (cur + 1)); } catch (e) {}
+}
+function depth(i){ return steps[i].stack.length; }
+function stepOver(){ const d = depth(cur); let j = cur + 1; while (j < N - 1 && depth(j) > d) j++; go(j); }
+function stepOut(){ const d = depth(cur); let j = cur + 1; while (j < N - 1 && depth(j) >= d) j++; go(j); }
+function jumpToLine(line, back){
+  const hit = j => steps[j].line === line && (steps[j].event === "line");
+  if (back) { for (let j = cur - 1; j >= 0; j--) if (hit(j)) return go(j); }
+  else {
+    for (let j = cur + 1; j < N; j++) if (hit(j)) return go(j);
+    for (let j = 0; j <= cur; j++) if (hit(j)) return go(j);
+  }
+  flash(line);
+}
+function flash(line){ const el = lineEls[line-1]; if (!el) return; el.style.outline = "2px dashed var(--err-bar)"; setTimeout(() => el.style.outline = "", 600); }
+function scrollCodeTo(line){
+  const el = lineEls[line-1]; if (!el) return;
+  const top = el.offsetTop - codeEl.offsetTop, h = codeEl.clientHeight;
+  if (top < codeEl.scrollTop + 20 || top > codeEl.scrollTop + h - 40) codeEl.scrollTop = top - h / 3;
+}
+function togglePlay(){
+  if (timer) { clearInterval(timer); timer = null; $("bPlay").textContent = "⏵ 재생"; return; }
+  if (cur >= N - 1) go(0);
+  $("bPlay").textContent = "⏸ 멈춤";
+  timer = setInterval(() => { if (cur >= N - 1) togglePlay(); else go(cur + 1); }, +$("speed").value);
+}
+$("onlyChanged").onchange = e => { $("frames").classList.toggle("frames-only-changed", e.target.checked); };
+$("speed").onchange =() => { if (timer) { togglePlay(); togglePlay(); } };
+$("bFirst").onclick = () => go(0);
+$("bPrev").onclick = () => go(cur - 1);
+$("bNext").onclick = () => go(cur + 1);
+$("bLast").onclick = () => go(N - 1);
+$("bOver").onclick = stepOver;
+$("bOut").onclick = stepOut;
+$("bPlay").onclick = togglePlay;
+$("slider").oninput = e => go(+e.target.value);
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "SELECT" || e.target.tagName === "INPUT" && e.target.type !== "range") return;
+  const k = e.key;
+  if (k === "ArrowRight") go(cur + 1);
+  else if (k === "ArrowLeft") go(cur - 1);
+  else if (k === "ArrowDown") stepOver();
+  else if (k === "ArrowUp") stepOut();
+  else if (k === "Home") go(0);
+  else if (k === "End") go(N - 1);
+  else if (k === " ") togglePlay();
+  else return;
+  e.preventDefault();
+});
+
+/* ---------- 시작 ---------- */
+$("fileName").textContent = TRACE.file;
+$("meta").textContent = `Python ${TRACE.python} · ${N}단계 기록`;
+document.title = `${TRACE.file} — Visual Code Runner`;
+if (!N) {
+  $("frames").innerHTML = "";
+  $("explain").innerHTML = TRACE.error ? `<li>${errorHelp()}</li>` : "<li>기록된 단계가 없습니다.</li>";
+  if (TRACE.error && TRACE.error.line && lineEls[TRACE.error.line-1]) lineEls[TRACE.error.line-1].classList.add("errl");
+  $("output").innerHTML = TRACE.error ? `<span class="errtb">${esc(TRACE.error.tb)}</span>` : "";
+  document.querySelectorAll("button").forEach(b => b.disabled = true);
+  return;
+}
+$("slider").max = N - 1;
+const m = /step=(\d+)/.exec(location.hash);
+const saved = vscodeApi && vscodeApi.getState();
+const want = m ? +m[1] - 1 : (saved && saved.file === TRACE.path ? saved.step : 0);
+cur = Math.max(0, Math.min(N - 1, want || 0));
+render();
+})();
+</script>
+</body>
+</html>

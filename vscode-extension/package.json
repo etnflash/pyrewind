@@ -1,0 +1,78 @@
+{
+  "name": "visual-code-runner",
+  "displayName": "Visual Code Runner",
+  "description": "파이썬 코드가 한 줄씩 실행되며 변수가 만들어지고 바뀌는 과정을 에디터 옆에서 시각화합니다 (.py / .ipynb)",
+  "version": "0.1.5",
+  "publisher": "visual-code-learner",
+  "license": "MIT",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Debuggers", "Education", "Visualization"],
+  "keywords": ["python", "jupyter", "pandas", "visualize", "education"],
+  "main": "./extension.js",
+  "activationEvents": ["onLanguage:python", "onNotebook:jupyter-notebook"],
+  "contributes": {
+    "commands": [
+      { "command": "visualCodeRunner.run", "title": "현재 파일 시각화", "category": "Visual Code Runner", "icon": "$(play-circle)" },
+      { "command": "visualCodeRunner.jumpToLine", "title": "이 줄이 실행되는 시점으로 이동", "category": "Visual Code Runner" },
+      { "command": "visualCodeRunner.next", "title": "다음 단계", "category": "Visual Code Runner" },
+      { "command": "visualCodeRunner.prev", "title": "이전 단계", "category": "Visual Code Runner" },
+      { "command": "visualCodeRunner.clear", "title": "시각화 닫기 / 강조 지우기", "category": "Visual Code Runner" }
+    ],
+    "menus": {
+      "editor/title": [
+        { "command": "visualCodeRunner.run", "when": "resourceLangId == python", "group": "navigation" }
+      ],
+      "notebook/toolbar": [
+        { "command": "visualCodeRunner.run", "when": "notebookType == jupyter-notebook", "group": "navigation/execute" }
+      ],
+      "editor/context": [
+        { "command": "visualCodeRunner.jumpToLine", "when": "visualCodeRunner.active && editorLangId == python", "group": "navigation@100" }
+      ],
+      "explorer/context": [
+        { "command": "visualCodeRunner.run", "when": "resourceExtname == .py || resourceExtname == .ipynb", "group": "navigation@100" }
+      ],
+      "commandPalette": [
+        { "command": "visualCodeRunner.jumpToLine", "when": "visualCodeRunner.active" },
+        { "command": "visualCodeRunner.next", "when": "visualCodeRunner.active" },
+        { "command": "visualCodeRunner.prev", "when": "visualCodeRunner.active" }
+      ]
+    },
+    "keybindings": [
+      { "command": "visualCodeRunner.run", "key": "ctrl+alt+v", "mac": "cmd+alt+v", "when": "!terminalFocus" },
+      { "command": "visualCodeRunner.run", "key": "ctrl+shift+f5", "mac": "cmd+shift+f5", "when": "resourceExtname == .py || resourceExtname == .ipynb || activeEditor == 'workbench.editor.notebook'" },
+      { "command": "visualCodeRunner.next", "key": "ctrl+alt+]", "mac": "cmd+alt+]", "when": "visualCodeRunner.active" },
+      { "command": "visualCodeRunner.prev", "key": "ctrl+alt+[", "mac": "cmd+alt+[", "when": "visualCodeRunner.active" },
+      { "command": "visualCodeRunner.jumpToLine", "key": "ctrl+alt+j", "mac": "cmd+alt+j", "when": "visualCodeRunner.active && editorTextFocus" }
+    ],
+    "configuration": {
+      "title": "Visual Code Runner",
+      "properties": {
+        "visualCodeRunner.pythonPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "사용할 python 실행 파일 경로. 비워 두면 **Python 확장에서 선택한 인터프리터**를 쓰고, 그것도 없으면 `python` 을 씁니다."
+        },
+        "visualCodeRunner.maxSteps": {
+          "type": "number",
+          "default": 3000,
+          "description": "기록할 최대 단계 수 (무한 루프 방지)"
+        },
+        "visualCodeRunner.runOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "시각화 중인 파일을 저장하면 자동으로 다시 실행"
+        },
+        "visualCodeRunner.inlineValues": {
+          "type": "boolean",
+          "default": true,
+          "description": "에디터 줄 끝에 변수 변화(예: total: 5 → 14)를 표시"
+        },
+        "visualCodeRunner.timeoutSeconds": {
+          "type": "number",
+          "default": 60,
+          "description": "실행 제한 시간(초)"
+        }
+      }
+    }
+  }
+}
