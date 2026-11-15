@@ -22,10 +22,12 @@
       { "command": "pyrewind.jumpToLine", "title": "이 줄이 실행되는 시점으로 이동", "category": "PyRewind" },
       { "command": "pyrewind.next", "title": "다음 단계", "category": "PyRewind" },
       { "command": "pyrewind.prev", "title": "이전 단계", "category": "PyRewind" },
+      { "command": "pyrewind.openInBrowser", "title": "브라우저에서 열기", "category": "PyRewind", "icon": "$(link-external)" },
       { "command": "pyrewind.clear", "title": "시각화 닫기 / 강조 지우기", "category": "PyRewind" }
     ],
     "menus": {
       "editor/title": [
+        { "command": "pyrewind.openInBrowser", "when": "activeWebviewPanelId == pyrewind", "group": "navigation" },
         { "command": "pyrewind.run", "when": "resourceLangId == python", "group": "navigation" }
       ],
       "notebook/toolbar": [
@@ -43,6 +45,7 @@
       ],
       "commandPalette": [
         { "command": "pyrewind.jumpToLine", "when": "pyrewind.active" },
+        { "command": "pyrewind.openInBrowser", "when": "pyrewind.active" },
         { "command": "pyrewind.next", "when": "pyrewind.active" },
         { "command": "pyrewind.prev", "when": "pyrewind.active" }
       ]

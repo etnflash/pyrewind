@@ -27,7 +27,7 @@ function reset() {
   Object.assign(state, {
     panel: state.panel || null, onMessage: state.onMessage || null, provider: state.provider || null,
     diags: new Map(),
-    applied: [], terminals: [], errors: [], posts: [], editors: [], docs: [], notebooks: [], choice: null, python: null,
+    applied: [], terminals: [], errors: [], posts: [], editors: [], docs: [], notebooks: [], choice: null, python: null, opened: [],
   });
 }
 reset();
@@ -103,6 +103,7 @@ const vscode = {
     get textDocuments() { return state.docs; },
     applyEdit: async e => { state.applied.push(...e.ops); return true; },
   },
+  env: { openExternal: async u => { state.opened.push(u); return true; } },
   extensions: { getExtension: () => undefined },
   commands: {
     registerCommand: (id, fn) => { commands[id] = fn; return { dispose() {} }; },
@@ -304,6 +305,23 @@ test("Python 이 없으면 → 설치 안내 알림", async () => {
   assert.ok(e, JSON.stringify(state.errors));
   assert.ok(e.m.includes("3.10"));
   assert.deepEqual(e.buttons, ["Python 설치 페이지", "설정 열기"]);
+});
+
+test("패널의 '브라우저에서 열기' → 같은 단계에서 시작하는 HTML 을 브라우저로 연다", async () => {
+  await openPy(path.join(EXAMPLES, "basics.py"));
+  state.onMessage({ type: "openBrowser", step: 7 });
+  await tick();
+  assert.equal(state.opened.length, 1);
+  const file = state.opened[0].fsPath;
+  assert.ok(file.endsWith("basics.py.html"), file);
+  const html = fs.readFileSync(file, "utf8");
+  assert.ok(html.includes('location.hash="step=7"'));
+  assert.ok(html.includes('"steps"'));
+  // 명령 팔레트로 실행해도 열린다 (마지막으로 받은 단계 기준)
+  state.onMessage({ type: "step", step: 3, total: 10, line: 1 });
+  await commands["pyrewind.openInBrowser"]();
+  assert.equal(state.opened.length, 2);
+  assert.ok(fs.readFileSync(state.opened[1].fsPath, "utf8").includes('location.hash="step=3"'));
 });
 
 /* ------------------------------------------------------------ 실행 */

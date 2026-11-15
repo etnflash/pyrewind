@@ -71,6 +71,7 @@ function activate(context) {
     vscode.commands.registerCommand("pyrewind.jumpToLine", jumpToEditorLine),
     vscode.commands.registerCommand("pyrewind.next", () => post({ type: "key", key: "next" })),
     vscode.commands.registerCommand("pyrewind.prev", () => post({ type: "key", key: "prev" })),
+    vscode.commands.registerCommand("pyrewind.openInBrowser", () => openInBrowser(lastStep ? lastStep.step : 0)),
     vscode.commands.registerCommand("pyrewind.clear", () => panel && panel.dispose()),
     vscode.commands.registerCommand("pyrewind.reveal", () => panel && panel.reveal(undefined, true)),
     vscode.commands.registerCommand("pyrewind.pipInstall", pipInstall),
@@ -361,6 +362,7 @@ function showTrace(trace, target, root) {
   }
   panel.title = `▶ ${path.basename(target.uri.fsPath)}`;
   panel.webview.html = html;
+  current.html = html;
   vscode.commands.executeCommand("setContext", "pyrewind.active", true);
 
   diagnostics.clear();
@@ -475,12 +477,28 @@ function post(msg) {
 }
 
 function onMessage(m) {
+  if (m && m.type === "openBrowser") { openInBrowser(m.step); return; }
   if (!m || m.type !== "step") return;
   lastStep = m;
   statusItem.text = `$(debug-step-over) VCR ${m.step + 1}/${m.total}`;
   statusItem.tooltip = "PyRewind 패널 보기";
   statusItem.show();
   applyDecorations(true);
+}
+
+// 지금 보고 있는 기록을 HTML 파일로 저장해 기본 브라우저에서 연다 (같은 단계에서 시작)
+async function openInBrowser(step) {
+  if (!current || !current.html) { vscode.window.showWarningMessage("먼저 PyRewind 로 코드를 실행해 주세요."); return null; }
+  const dir = path.join(os.tmpdir(), "pyrewind-browser");
+  fs.mkdirSync(dir, { recursive: true });
+  const name = path.basename(current.fsPath).replace(/[^\w.\-가-힣]/g, "_");
+  const file = path.join(dir, `${name}.html`);
+  const n = Number.isInteger(step) ? step : 0;
+  // file:// 주소의 #step=N 은 OS 가 떼어 버릴 수 있어서, 시작 단계를 HTML 안에 직접 넣는다
+  const html = current.html.replace("<head>", `<head><script>if(!location.hash)location.hash="step=${n}"</script>`);
+  fs.writeFileSync(file, html, "utf8");
+  await vscode.env.openExternal(vscode.Uri.file(file));
+  return file;
 }
 
 /* ------------------------------------------------------------- 에디터 동기화 */

@@ -188,6 +188,7 @@ kbd{font-family:inherit;font-size:11px;border:1px solid var(--border);border-bot
   <h1>⏪ Py<span>Rewind</span></h1>
   <span class="file" id="fileName"></span>
   <span class="meta" id="meta"></span>
+  <button id="bBrowser" hidden title="지금 보고 있는 단계를 브라우저(크롬 등)에서 넓게 열기">🌐 브라우저에서 열기</button>
 </header>
 <div class="layout">
   <div class="col">
@@ -269,6 +270,9 @@ let cur = 0, timer = null, historyKey = null;
 const vscodeApi = typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : null;
 if (vscodeApi) {
   document.body.classList.add("in-vscode");
+  const bb = document.getElementById("bBrowser");
+  bb.hidden = false;
+  bb.onclick = () => vscodeApi.postMessage({type: "openBrowser", step: cur});
   window.addEventListener("message", e => {
     const m = e.data || {};
     if (m.type === "jumpToLine") jumpToLine(m.line, !!m.back);
