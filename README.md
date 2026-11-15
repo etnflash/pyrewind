@@ -1,5 +1,7 @@
 # ⏪ PyRewind
 
+[![CI](https://github.com/etnflash/pyrewind/actions/workflows/ci.yml/badge.svg)](https://github.com/etnflash/pyrewind/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)
+
 **English** | [한국어](README.ko.md)
 
 *Rewind your Python, one line at a time.* (한줄씩 되감는 파이썬)

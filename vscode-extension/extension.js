@@ -276,14 +276,19 @@ async function run(arg, silent, focus, nbDoc, textDoc) {
         title: `PyRewind: ${path.basename(fsPath)} 실행 중…`, cancellable: true },
       (_p, token) => spawnTracer(py, args, env, path.dirname(fsPath), token, (cfg.get("timeoutSeconds") || 60) * 1000));
     if (result.error) {
-      if (result.error.code === "ENOENT") {
-        vscode.window.showErrorMessage(`python 을 찾을 수 없습니다 (${py}). 설정에서 pyrewind.pythonPath 를 지정하거나 Python 확장에서 인터프리터를 선택하세요.`, "설정 열기")
-          .then(c => c && vscode.commands.executeCommand("workbench.action.openSettings", "pyrewind.pythonPath"));
-      } else vscode.window.showErrorMessage(`PyRewind 실행 실패: ${result.error.message}`);
+      if (result.error.code === "ENOENT") pythonMissing(py);
+      else vscode.window.showErrorMessage(`PyRewind 실행 실패: ${result.error.message}`);
       return;
     }
     if (result.cancelled) { vscode.window.showWarningMessage("PyRewind: 실행을 중단했습니다."); return; }
     if (!fs.existsSync(outJson)) {
+      // Windows 의 'python' 앱 실행 별칭(가짜 python)은 설치 안내만 출력하고 9009 로 끝난다
+      if (result.code === 9009 || /Python was not found|Microsoft Store/i.test(result.stderr || "")) { pythonMissing(py); return; }
+      if (/SyntaxError|requires Python|No module named ['"]?pyrewind/i.test(result.stderr || "")) {
+        output.show(true);
+        vscode.window.showErrorMessage(`PyRewind 는 Python 3.10 이상이 필요합니다 (${py}). 더 새 버전의 Python 을 선택해 주세요.`);
+        return;
+      }
       output.show(true);
       vscode.window.showErrorMessage("PyRewind: 기록을 만들지 못했습니다. 출력 창의 로그를 확인하세요.");
       return;
@@ -297,6 +302,16 @@ async function run(arg, silent, focus, nbDoc, textDoc) {
   }
 }
 
+function pythonMissing(py) {
+  vscode.window.showErrorMessage(
+    `Python 을 찾을 수 없습니다 (${py}). PyRewind 를 쓰려면 Python 3.10 이상이 설치되어 있어야 합니다.`,
+    "Python 설치 페이지", "설정 열기")
+    .then(c => {
+      if (c === "Python 설치 페이지") vscode.env.openExternal(vscode.Uri.parse("https://www.python.org/downloads/"));
+      else if (c === "설정 열기") vscode.commands.executeCommand("workbench.action.openSettings", "pyrewind.pythonPath");
+    });
+}
+
 function spawnTracer(py, args, env, cwd, token, timeoutMs) {
   return new Promise(resolve => {
     let done = false;
@@ -305,10 +320,11 @@ function spawnTracer(py, args, env, cwd, token, timeoutMs) {
     try {
       child = cp.spawn(py, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
     } catch (e) { finish({ error: e }); return; }
+    let stderr = "";
     child.stdout.on("data", d => output.append(d.toString()));
-    child.stderr.on("data", d => output.append(d.toString()));
+    child.stderr.on("data", d => { stderr += d.toString(); output.append(d.toString()); });
     child.on("error", e => finish({ error: e }));
-    child.on("close", code => finish({ code }));
+    child.on("close", code => finish({ code, stderr }));
     const timer = setTimeout(() => {
       output.appendLine(`[pyrewind] 제한 시간(${timeoutMs / 1000}초) 초과로 중단`);
       child.kill(); finish({ cancelled: true });

@@ -36,10 +36,28 @@ def files_to_pack() -> list[tuple[Path, str]]:
     for f in sorted(PKG.rglob("*")):
         if f.is_file() and "__pycache__" not in f.parts:
             out.append((f, "extension/python/pyrewind/" + f.relative_to(PKG).as_posix()))
+    out.append((ROOT / "LICENSE", "extension/LICENSE.txt"))
     return out
 
 
 def manifest(pkg: dict) -> str:
+    repo = pkg.get("repository", {}).get("url", "")
+    links = ""
+    if repo:
+        links = (f'<Property Id="Microsoft.VisualStudio.Services.Links.Source" Value="{escape(repo)}" />'
+                 f'<Property Id="Microsoft.VisualStudio.Services.Links.GitHub" Value="{escape(repo)}" />'
+                 f'<Property Id="Microsoft.VisualStudio.Services.Links.Repository" Value="{escape(repo)}" />')
+    if pkg.get("bugs", {}).get("url"):
+        links += f'<Property Id="Microsoft.VisualStudio.Services.Links.Support" Value="{escape(pkg["bugs"]["url"])}" />'
+    if pkg.get("homepage"):
+        links += f'<Property Id="Microsoft.VisualStudio.Services.Links.Learn" Value="{escape(pkg["homepage"])}" />'
+    banner = pkg.get("galleryBanner", {})
+    if banner:
+        links += (f'<Property Id="Microsoft.VisualStudio.Services.Branding.Color" Value="{escape(banner.get("color", ""))}" />'
+                  f'<Property Id="Microsoft.VisualStudio.Services.Branding.Theme" Value="{escape(banner.get("theme", "dark"))}" />')
+    icon = f"<Icon>extension/{pkg['icon']}</Icon>" if pkg.get("icon") else ""
+    icon_asset = (f'<Asset Type="Microsoft.VisualStudio.Services.Icons.Default" Path="extension/{pkg["icon"]}" Addressable="true" />'
+                  if pkg.get("icon") else "")
     return f"""<?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
   <Metadata>
@@ -55,7 +73,10 @@ def manifest(pkg: dict) -> str:
       <Property Id="Microsoft.VisualStudio.Code.ExtensionPack" Value="" />
       <Property Id="Microsoft.VisualStudio.Code.ExtensionKind" Value="workspace" />
       <Property Id="Microsoft.VisualStudio.Code.LocalizedLanguages" Value="" />
+      {links}
     </Properties>
+    <License>extension/LICENSE.txt</License>
+    {icon}
   </Metadata>
   <Installation>
     <InstallationTarget Id="Microsoft.VisualStudio.Code" />
@@ -64,6 +85,8 @@ def manifest(pkg: dict) -> str:
   <Assets>
     <Asset Type="Microsoft.VisualStudio.Code.Manifest" Path="extension/package.json" Addressable="true" />
     <Asset Type="Microsoft.VisualStudio.Services.Content.Details" Path="extension/README.md" Addressable="true" />
+    <Asset Type="Microsoft.VisualStudio.Services.Content.License" Path="extension/LICENSE.txt" Addressable="true" />
+    {icon_asset}
   </Assets>
 </PackageManifest>
 """

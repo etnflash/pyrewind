@@ -27,7 +27,7 @@ function reset() {
   Object.assign(state, {
     panel: state.panel || null, onMessage: state.onMessage || null, provider: state.provider || null,
     diags: new Map(),
-    applied: [], terminals: [], errors: [], posts: [], editors: [], docs: [], notebooks: [], choice: null,
+    applied: [], terminals: [], errors: [], posts: [], editors: [], docs: [], notebooks: [], choice: null, python: null,
   });
 }
 reset();
@@ -97,7 +97,7 @@ const vscode = {
     onDidSaveTextDocument: () => ({ dispose() {} }),
     onDidSaveNotebookDocument: () => ({ dispose() {} }),
     onDidChangeTextDocument: () => ({ dispose() {} }),
-    getConfiguration: () => ({ get: k => ({ pythonPath: PYTHON, maxSteps: 3000, inlineValues: true, timeoutSeconds: 120 }[k]) }),
+    getConfiguration: () => ({ get: k => ({ pythonPath: state.python || PYTHON, maxSteps: 3000, inlineValues: true, timeoutSeconds: 120 }[k]) }),
     getWorkspaceFolder: () => ({ uri: { fsPath: REPO } }),
     get notebookDocuments() { return state.notebooks; },
     get textDocuments() { return state.docs; },
@@ -295,6 +295,15 @@ test("노트북 셀 툴바 버튼 → 그 셀만 시각화", async () => {
   const t = traceFromHtml();
   assert.deepEqual(t.focus, { start: t.cells[1].start, end: t.cells[1].end });
   assert.equal(t.error, null);
+});
+
+test("Python 이 없으면 → 설치 안내 알림", async () => {
+  state.python = path.join(tmpDir, "no-such-python.exe");
+  await openPy(path.join(EXAMPLES, "basics.py"));
+  const e = state.errors.find(x => x.m.includes("Python 을 찾을 수 없습니다"));
+  assert.ok(e, JSON.stringify(state.errors));
+  assert.ok(e.m.includes("3.10"));
+  assert.deepEqual(e.buttons, ["Python 설치 페이지", "설정 열기"]);
 });
 
 /* ------------------------------------------------------------ 실행 */
