@@ -2,7 +2,7 @@
   "name": "pyrewind",
   "displayName": "PyRewind — 한줄씩 되감는 파이썬",
   "description": "파이썬 코드를 한 줄씩 앞뒤로 되감으며 변수가 만들어지고 바뀌는 과정을 에디터 옆에서 봅니다 (.py / .ipynb, pandas, 한국어 오류 도우미)",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "etnflash",
   "license": "MIT",
   "icon": "icon.png",
@@ -70,6 +70,11 @@
           "type": "number",
           "default": 3000,
           "description": "기록할 최대 단계 수 (무한 루프 방지)"
+        },
+        "pyrewind.loopLimit": {
+          "type": "number",
+          "default": 0,
+          "markdownDescription": "같은 줄은 **처음 N번만** 기록하고, 그 뒤 반복은 기록 없이 빠르게 실행합니다 (학습 반복문처럼 오래 도는 코드용). `0` 이면 전부 기록. 예: `3`"
         },
         "pyrewind.runOnSave": {
           "type": "boolean",

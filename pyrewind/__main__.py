@@ -50,6 +50,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--json", action="store_true", help="HTML 대신 trace JSON 저장")
     p.add_argument("-q", "--quiet", action="store_true", help="프로그램 출력을 터미널에 표시하지 않음")
     p.add_argument("--lines", help="이 줄 범위만 기록 (예: 12-15, 또는 12). 앞부분은 기록 없이 실행해 변수를 준비")
+    p.add_argument("--loop-limit", type=int, default=0,
+                   help="같은 줄은 처음 N번만 기록하고 그 뒤 반복은 기록 없이 실행 (학습 반복문 등). 0 = 전부 기록")
     p.add_argument("--cell", type=int, help="노트북: N번째 코드 셀만 기록. --lines 와 함께 쓰면 그 셀 안의 줄 번호")
     args = p.parse_args(argv)
 
@@ -85,7 +87,8 @@ def main(argv: list[str] | None = None) -> int:
     print("─" * 40, file=sys.stderr, flush=True)
     trace = run_trace(str(path), source, max_steps=args.max_steps,
                       stdin_lines=stdin_lines, echo=not args.quiet,
-                      display_name=path.name, cells=cells, display_source=display_source, focus=focus)
+                      display_name=path.name, cells=cells, display_source=display_source, focus=focus,
+                      loop_limit=args.loop_limit)
     sys.stdout.flush()
     print("─" * 40, file=sys.stderr)
 

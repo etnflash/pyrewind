@@ -254,6 +254,7 @@ async function run(arg, silent, focus, nbDoc, textDoc) {
   const outJson = path.join(tmpDir, "trace.json");
   const args = ["-m", "pyrewind", fsPath, "--json", "--no-open", "-q",
     "-o", outJson, "--max-steps", String(cfg.get("maxSteps") || 3000)];
+  if (cfg.get("loopLimit") > 0) args.push("--loop-limit", String(cfg.get("loopLimit")));
   if (focus) {
     args.push("--lines", `${focus.start}-${focus.end}`);
     if (focus.cell) args.push("--cell", String(focus.cell));

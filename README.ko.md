@@ -115,8 +115,23 @@ pyrewind 노트북.ipynb --cell 3         # 3번째 코드 셀만 기록 (--line
 - **이미지**: 컬러 배열 `(높이, 너비, 3)`, PIL 이미지, 28×28 같은 2차원 배열은 **그림으로** 보입니다.
 - **3차원 이상 배열 / 텐서**: `(개수, 채널, 높이, 너비)` 같은 배열은 한 장씩 그림으로 보여주고 **슬라이더**로 넘겨 볼 수 있어요. 3×3 필터처럼 작으면 숫자도 같이 나옵니다.
 - **PyTorch / TensorFlow**: 텐서는 모양·dtype·장치(cpu/cuda)·grad 여부와 함께, 모델은 층 구조와 파라미터 수로 보여줍니다.
+- **히트맵**: 실수 값의 특징 맵·Grad-CAM·가중치는 **색**으로 그립니다 (0 이상은 보라→노랑, 음수가 있으면 파랑-흰색-빨강). 같은 가로세로 비율의 사진 변수가 있으면 **그 위에 겹친 그림**도 같이 보여줘요.
 - `apply(내함수)`처럼 라이브러리가 내 함수를 호출하면 그 함수 안도 한 줄씩 보입니다. 반대로 `model.fit()` 같은 라이브러리 내부 계산은 한 단계로 지나갑니다.
-- 예제: [pandas_tour.ipynb](examples/pandas_tour.ipynb) (32셀), [ml_tour.ipynb](examples/ml_tour.ipynb) (15셀), [vision_tour.ipynb](examples/vision_tour.ipynb) (이미지·필터·3D 그래프), [dl_tour.ipynb](examples/dl_tour.ipynb) (PyTorch CNN)
+- 예제: [pandas_tour.ipynb](examples/pandas_tour.ipynb) (32셀), [ml_tour.ipynb](examples/ml_tour.ipynb) (15셀), [vision_tour.ipynb](examples/vision_tour.ipynb) (이미지·필터·3D 그래프), [dl_tour.ipynb](examples/dl_tour.ipynb) (PyTorch CNN), [gradcam_tour.ipynb](examples/gradcam_tour.ipynb) (층별 특징 맵, 첫 층 vs 마지막 층 Grad-CAM)
+
+## 오래 걸리는 코드 · 큰 데이터 · GPU
+
+PyRewind 는 줄마다 변수를 기록하기 때문에 **긴 학습을 통째로 기록하는 용도는 아닙니다.** 대신 이렇게 쓰세요.
+
+- **반복은 처음 몇 번만 기록**: `--loop-limit 3` (VS Code 설정 `pyrewind.loopLimit`). 같은 줄은 처음 3번만 한 줄씩 기록하고, 나머지 반복은 기록 없이 빠르게 실행합니다. 화면에는 "⏩ 반복 기록 생략: 400줄" 처럼 표시되고, 변수 값은 그 시점 그대로 보여요.
+- **PyRewind 로 실행할 때만 데이터를 작게**: 실행 중에는 환경 변수 `PYREWIND=1` 이 켜집니다.
+  ```python
+  if os.environ.get("PYREWIND"):
+      dataset = Subset(dataset, range(64))   # 시각화할 때만 64개, 평소에는 전체
+      EPOCHS = 1
+  ```
+- **일부만 보기**: 드래그한 줄 / `# %%` 블록 / 노트북 셀 하나만 기록 (그 앞 코드는 기록 없이 실행).
+- **GPU 서버**: VS Code 의 Remote-SSH 로 서버에 접속하면 확장이 서버의 Python·GPU 로 실행됩니다 (텐서에 `cuda:0` 표시). 실행 제한 시간은 `pyrewind.timeoutSeconds` 로 늘릴 수 있어요.
 
 ## 동작 원리
 

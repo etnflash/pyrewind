@@ -311,7 +311,8 @@ class Encoder:
             return {"k": "nd", "t": f"{tn}[{v.mode}]", "id": oid,
                     "shape": [h, w] + ([ch] if ch > 1 else []),
                     "dims": "높이 × 너비" + (" × 채널" if ch > 1 else ""),
-                    "slices": [{"l": "", "src": src, "w": w, "h": h}], "total": 1, "stats": None}
+                    "slices": [{"l": "", "src": src, "w": w, "h": h}], "total": 1, "stats": None,
+                    "photo": True}
         except Exception:
             return None
 
@@ -369,6 +370,10 @@ def _encode_array(a, label, oid, full_shape=None, approx=False, stats=None):
     if a.ndim == 1:
         items = [{"k": "prim", "t": str(a.dtype), "r": _cell(x)} for x in a[:MAX_ARR].tolist()]
         return {"k": "seq", "t": label, "id": oid, "len": shape[0], "items": items}
+    if a.ndim >= 3 and sum(1 for x in a.shape if x > 1) <= 2 and not approx:
+        # (64, 1, 1) 이나 (1, 1, 28, 28) 처럼 크기 1인 축을 빼면 1·2차원인 배열은 그 모양으로
+        sq = a.reshape([x for x in a.shape if x > 1] or [1])
+        return _encode_array(sq, f"{label} {tuple(shape)}", oid)
     numeric = a.dtype.kind in "biuf"
     if a.ndim == 2:
         r, c = shape
@@ -381,24 +386,73 @@ def _encode_array(a, label, oid, full_shape=None, approx=False, stats=None):
         }
         if numeric and min(a.shape) >= 8:   # 28×28 손글씨 같은 2차원 그림
             lo, hi = _range(a, np)
-            e["img"] = _png_src(_to_u8(_shrink(a, np), lo, hi, np), np)
+            heat = _is_heat(a, np)
+            e["img"] = _png_src(_colorize(_to_u8(_shrink(a, np), lo, hi, np), lo, hi, heat, np), np)
+            if heat:
+                e["heat"] = _heat_info(lo, hi)
         return e
     if not numeric:
         return {"k": "prim", "t": f"{label} shape={shape}", "r": _safe_repr(a, 300)}
     planes, total, dims = _planes(a, shape, np)
     lo, hi = _range(a, np)
+    color = bool(planes) and planes[0][1].ndim == 3
+    heat = not color and _is_heat(a, np)
     slices = []
     for lab, pl in planes:
         small = _shrink(pl, np)
-        sl = {"l": lab, "src": _png_src(_to_u8(small, lo, hi, np), np),
+        u8 = _to_u8(small, lo, hi, np)
+        sl = {"l": lab, "src": _png_src(_colorize(u8, lo, hi, heat, np), np),
               "w": int(pl.shape[1]), "h": int(pl.shape[0])}
         if pl.ndim == 2 and pl.shape[0] * pl.shape[1] <= 64:   # 3×3 필터처럼 작으면 숫자도
             sl["vals"] = [[_cell(x) for x in row] for row in pl.tolist()]
         slices.append(sl)
     if stats is None:
         stats = _np_stats(a, np, approx)
-    return {"k": "nd", "t": label, "id": oid, "shape": list(shape), "dims": dims,
-            "slices": slices, "total": total, "stats": stats}
+    e = {"k": "nd", "t": label, "id": oid, "shape": list(shape), "dims": dims,
+         "slices": slices, "total": total, "stats": stats}
+    if color:
+        e["photo"] = True      # 히트맵을 겹쳐 볼 수 있는 사진
+    if heat:
+        e["heat"] = _heat_info(lo, hi)
+    return e
+
+
+# 히트맵 색 (matplotlib 의 viridis 와 RdBu 를 본뜬 것)
+_VIRIDIS = [(68, 1, 84), (72, 40, 120), (62, 74, 137), (49, 104, 142), (38, 130, 142),
+            (31, 158, 137), (53, 183, 121), (109, 205, 89), (180, 222, 44), (253, 231, 37)]
+_RDBU = [(5, 48, 97), (33, 102, 172), (67, 147, 195), (146, 197, 222), (209, 229, 240), (247, 247, 247),
+         (253, 219, 199), (244, 165, 130), (214, 96, 77), (178, 24, 43), (103, 0, 31)]
+_LUTS: dict = {}
+
+
+def _lut(name, np):
+    if name not in _LUTS:
+        anchors = np.array(_VIRIDIS if name == "viridis" else _RDBU, dtype=np.float64)
+        xs = np.linspace(0, 255, len(anchors))
+        _LUTS[name] = np.stack([np.interp(np.arange(256), xs, anchors[:, c]) for c in range(3)], axis=1).astype(np.uint8)
+    return _LUTS[name]
+
+
+def _is_heat(a, np) -> bool:
+    """실수 값의 한 채널 배열 (특징 맵, Grad-CAM, 가중치 등) 은 색 히트맵으로 그린다.
+    (0~255 정수 / bool 은 흑백 사진으로)"""
+    return a.dtype.kind == "f"
+
+
+def _heat_info(lo, hi):
+    signed = lo < 0 < hi
+    return {"cmap": "RdBu" if signed else "viridis", "lo": _cell(float(lo)), "hi": _cell(float(hi))}
+
+
+def _colorize(u8, lo, hi, heat, np):
+    if not heat or u8.ndim != 2:
+        return u8
+    if lo < 0 < hi:  # 0 이 흰색 가운데가 되도록 다시 맞춤 (음수 파랑, 양수 빨강)
+        m = max(-lo, hi)
+        x = (u8.astype(np.float64) * ((hi - lo) / 255.0) + lo) / m        # -1 ~ 1
+        idx = np.clip((x + 1) * 127.5, 0, 255).astype(np.uint8)
+        return np.ascontiguousarray(_lut("RdBu", np)[idx])
+    return np.ascontiguousarray(_lut("viridis", np)[u8])
 
 
 def _planes(a, shape, np):
@@ -655,6 +709,11 @@ class Tracer:
         self.focus_from_module = False   # 전역 코드에서 시작했으면 영역이 끝날 때 실행을 멈춘다
         self.focus_frames: set = set()   # 선택 영역에서 호출한 함수 프레임 (안쪽도 기록)
         self.plotly_ready = False
+        # 반복 기록 제한: 같은 줄이 loop_limit 번 넘게 실행되면 그 뒤로는 기록 없이 실행
+        self.loop_limit = 0
+        self.line_hits: dict = {}
+        self.muted: set = set()          # 지금 기록을 건너뛰는 프레임
+        self.skipped = 0                 # 마지막 기록 이후 건너뛴 줄 수
 
     # --- 스냅샷 ---------------------------------------------------------
     def _frame_info(self, f) -> dict:
@@ -709,6 +768,34 @@ class Tracer:
             return frame in self.focus_frames
         return frame in self.focus_frames or (self.focus_started and self._in_focus(frame))
 
+    def _limited(self, frame, event) -> bool:
+        """반복 기록 제한에 걸려 이번 이벤트를 기록하지 않을지."""
+        if event == "call":
+            caller = frame.f_back
+            n = self.line_hits.get(frame.f_code, 0) + 1   # 같은 함수를 부른 횟수
+            self.line_hits[frame.f_code] = n
+            if (caller is not None and caller in self.muted) or n > self.loop_limit:
+                self.muted.add(frame)   # 건너뛰는 중에 부른 함수 / N번 넘게 부른 함수도 건너뜀
+                self.skipped += 1
+                return True
+            return False
+        if event == "line":
+            key = (frame.f_code, frame.f_lineno)
+            n = self.line_hits.get(key, 0) + 1
+            self.line_hits[key] = n
+            if n > self.loop_limit or (frame in self.muted and frame.f_back in self.muted):
+                self.muted.add(frame)
+                self.skipped += 1
+                return True
+            self.muted.discard(frame)   # 반복문을 빠져나와 처음 보는 줄 → 다시 기록
+            return False
+        if event == "return":
+            if frame in self.muted:
+                self.muted.discard(frame)
+                return True
+            return False
+        return False   # exception 은 항상 기록 (오류가 난 순간을 보여주려고)
+
     def _cell_of(self, line):
         for i, c in enumerate(self.cells):
             if c["start"] <= line <= c["end"]:
@@ -739,6 +826,9 @@ class Tracer:
             "stack": self._stack(frame),
             "out": self.sink.length,
         }
+        if self.skipped:
+            step["skipped"] = self.skipped   # 이 단계 전에 기록 없이 실행한 줄 수
+            self.skipped = 0
         if event == "return":
             if self.last_event.get(fid) == "exception":
                 step["unwind"] = True  # 예외 때문에 함수가 중단됨
@@ -767,7 +857,8 @@ class Tracer:
                     _flush_figures()  # 이전 셀에서 그린 그래프를 출력
                 self.last_cell = cell
         if event in ("call", "line", "return", "exception") and self._should_record(frame, event):
-            self._record(frame, event, arg)
+            if not (self.loop_limit and self._limited(frame, event)):
+                self._record(frame, event, arg)
         if event == "return" and not (frame.f_code.co_flags & _GEN_FLAGS):
             self.fids.pop(frame, None)
             self.focus_frames.discard(frame)
@@ -799,7 +890,8 @@ def _format_error(e: BaseException, filename: str) -> dict:
 def run_trace(path: str, source: str, *, max_steps: int = 3000,
               stdin_lines: list[str] | None = None, echo: bool = True,
               display_name: str | None = None, cells: list | None = None,
-              display_source: str | None = None, focus: tuple[int, int] | None = None) -> dict:
+              display_source: str | None = None, focus: tuple[int, int] | None = None,
+              loop_limit: int = 0) -> dict:
     """source 를 실행한다. display_source 가 있으면 화면에는 그것을 보여준다 (줄 번호는 같아야 함).
 
     focus=(시작 줄, 끝 줄) 을 주면 그 앞의 코드는 기록 없이 실행해 변수를 준비하고,
@@ -819,6 +911,7 @@ def run_trace(path: str, source: str, *, max_steps: int = 3000,
         "truncated": False,
         "max_steps": max_steps,
         "focus": {"start": focus[0], "end": focus[1]} if focus else None,
+        "loop_limit": loop_limit or 0,
     }
 
     try:
@@ -863,6 +956,9 @@ def run_trace(path: str, source: str, *, max_steps: int = 3000,
 
     old_out, old_err, old_input = sys.stdout, sys.stderr, builtins.input
     old_argv, old_cwd, old_path = sys.argv, os.getcwd(), list(sys.path)
+    # 코드가 "지금 PyRewind 로 실행 중" 인지 알 수 있게 (예: 시각화할 때만 데이터를 작게)
+    old_flag = os.environ.get("PYREWIND")
+    os.environ["PYREWIND"] = "1"
     pending = list(stdin_lines) if stdin_lines is not None else None
 
     def traced_input(prompt=""):
@@ -885,6 +981,7 @@ def run_trace(path: str, source: str, *, max_steps: int = 3000,
     tracer = Tracer(filename, max_steps, sink)
     tracer.cells = cells or []
     tracer.focus = focus
+    tracer.loop_limit = max(0, int(loop_limit or 0))
     g = {"__name__": "__main__", "__file__": filename, "__builtins__": builtins,
          "__pyrewind_display__": _vcr_display}
 
@@ -917,6 +1014,10 @@ def run_trace(path: str, source: str, *, max_steps: int = 3000,
         _flush_figures()  # 마지막 셀에서 그리고 show() 안 한 그래프
         _unpatch_plotly()
         IMAGE_HOOK = None
+        if old_flag is None:
+            os.environ.pop("PYREWIND", None)
+        else:
+            os.environ["PYREWIND"] = old_flag
         if old_backend is None:
             os.environ.pop("MPLBACKEND", None)
         else:

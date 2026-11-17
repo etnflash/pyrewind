@@ -24,7 +24,7 @@ Built for beginners who debug by staring at `print` output. The UI and error exp
 - **Variables and call stack** for each step, with *new* / *changed* / *argument* highlights and `before → after` values.
 - **Structure-aware rendering**: lists as cells, dicts and objects as tables, pandas **DataFrame / Series** and numpy arrays as tables with changed cells highlighted. Aliases share an object number (`#1`), so `b = a; b.append(…)` is visible.
 - **Jupyter notebooks**: all code cells run as one program; last-expression output, `display()`, and matplotlib / seaborn figures (rendered as images in the output pane) work like in Jupyter. plotly `fig.show()` becomes an interactive (rotatable 3D) chart.
-- **Images, tensors, deep learning**: color arrays `(H, W, 3)`, PIL images and large 2-D arrays are drawn as pictures; 3-D+ arrays such as `(N, C, H, W)` batches or CNN feature maps are shown slice by slice with a slider. PyTorch / TensorFlow tensors show shape, dtype, device and grad; models show their layer structure and parameter count.
+- **Images, tensors, deep learning**: color arrays `(H, W, 3)`, PIL images and large 2-D arrays are drawn as pictures; 3-D+ arrays such as `(N, C, H, W)` batches or CNN feature maps are shown slice by slice with a slider. PyTorch / TensorFlow tensors show shape, dtype, device and grad; models show their layer structure and parameter count. Float feature maps / Grad-CAM maps are drawn as colour heatmaps and overlaid on a same-shaped photo variable. While running, `PYREWIND=1` is set so code can shrink its dataset for visualisation.
 - **Error helper**: plain-language explanation and fix for ~20 common errors, the values used on the failing line, a link to *the step where that value was set*, and **typo suggestions** pulled from the real object at the moment of failure (`df.groupbyy` → `groupby`, `test_sise=` → `test_size`, `import pandsa` → `pandas`).
 - **VS Code extension**: the viewer opens beside your editor; the current step is highlighted *in your source* (including notebook cells) with inline `◀ total: 5 → 14` hints; errors become diagnostics with **one-click quick fixes** and a `pip install` action for missing packages.
 - **Zero dependencies**: the tracer uses only the Python standard library; the viewer is a single offline HTML file you can share.
@@ -64,6 +64,7 @@ The extension uses the interpreter selected in the Python extension, falling bac
 | `-o out.html` | where to write the viewer (default: temp dir) |
 | `--stdin inputs.txt` | values fed to `input()`, one per line |
 | `--max-steps N` | recording limit (default 3000, protects against infinite loops) |
+| `--loop-limit N` | record each line only its first N times; later loop iterations run unrecorded (for training loops) |
 | `--json` | write the raw trace instead of HTML |
 | `--lines 12-15` | record only these lines (code before them runs untraced) |
 | `--cell 3` | notebooks: record only the 3rd code cell (`--lines` then counts within the cell) |

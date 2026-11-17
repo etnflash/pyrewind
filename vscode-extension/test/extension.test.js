@@ -28,7 +28,7 @@ function reset() {
   Object.assign(state, {
     panel: state.panel || null, onMessage: state.onMessage || null, provider: state.provider || null,
     diags: new Map(),
-    applied: [], terminals: [], errors: [], posts: [], editors: [], docs: [], notebooks: [], choice: null, python: null, opened: [],
+    applied: [], terminals: [], errors: [], posts: [], editors: [], docs: [], notebooks: [], choice: null, python: null, opened: [], loopLimit: 0,
   });
 }
 reset();
@@ -98,7 +98,7 @@ const vscode = {
     onDidSaveTextDocument: () => ({ dispose() {} }),
     onDidSaveNotebookDocument: () => ({ dispose() {} }),
     onDidChangeTextDocument: () => ({ dispose() {} }),
-    getConfiguration: () => ({ get: k => ({ pythonPath: state.python || PYTHON, maxSteps: 3000, inlineValues: true, timeoutSeconds: 120 }[k]) }),
+    getConfiguration: () => ({ get: k => ({ pythonPath: state.python || PYTHON, maxSteps: 3000, inlineValues: true, timeoutSeconds: 120, loopLimit: state.loopLimit }[k]) }),
     getWorkspaceFolder: () => ({ uri: { fsPath: REPO } }),
     get notebookDocuments() { return state.notebooks; },
     get textDocuments() { return state.docs; },
@@ -323,6 +323,15 @@ test("패널의 '브라우저에서 열기' → 같은 단계에서 시작하는
   await commands["pyrewind.openInBrowser"]();
   assert.equal(state.opened.length, 2);
   assert.ok(fs.readFileSync(state.opened[1].fsPath, "utf8").includes('location.hash="step=3"'));
+});
+
+test("설정 loopLimit → 반복은 처음 N번만 기록", async () => {
+  state.loopLimit = 2;
+  await openPy(tmpPy("loop.py", ["t = 0", "for i in range(50):", "    t += i", "end = t", ""].join("\n")));
+  const t = traceFromHtml();
+  assert.equal(t.loop_limit, 2);
+  assert.ok(t.steps.length < 12, String(t.steps.length));
+  assert.ok(t.steps.some(s => s.skipped > 0));
 });
 
 /* ------------------------------------------------------------ 실행 */

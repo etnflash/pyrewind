@@ -168,3 +168,69 @@ def test_plotly_show_is_captured_as_interactive_plot(tmp_path):
     assert t["output"].count("\x00img:") == 1
     fig = final_globals(t)["fig"]
     assert fig["k"] == "prim" and "Scatter3d" in fig["r"]
+
+
+def test_float_planes_are_colored_heatmaps_and_photos_are_marked(trace_code):
+    np = pytest.importorskip("numpy")
+    t = trace_code("""
+        import numpy as np
+        photo = np.zeros((1, 3, 16, 16), dtype=np.float32)   # 사진 한 장
+        cam = np.linspace(0, 1, 256).reshape(16, 16)          # 0~1 히트맵
+        signed = np.linspace(-1, 2, 256).reshape(1, 1, 16, 16)  # 음수/양수 → 파랑/빨강
+        gray = np.full((16, 16), 7, dtype=np.uint8)           # 0~255 정수는 흑백 그대로
+        """)
+    g = final_globals(t)
+    assert g["photo"]["photo"] is True and "heat" not in g["photo"]
+    assert g["cam"]["heat"]["cmap"] == "viridis"
+    assert g["signed"]["k"] == "df" and g["signed"]["heat"]["cmap"] == "RdBu"   # 크기 1인 축은 빠짐
+    assert g["signed"]["t"].endswith("(1, 1, 16, 16)")
+    assert "heat" not in g["gray"]
+
+
+def test_size_one_axes_are_squeezed(trace_code):
+    pytest.importorskip("numpy")
+    t = trace_code("""
+        import numpy as np
+        cx = np.arange(64).reshape(64, 1, 1)
+        """)
+    cx = final_globals(t)["cx"]
+    assert cx["k"] == "seq" and cx["len"] == 64 and cx["t"] == "ndarray[int64] (64, 1, 1)"
+
+
+def test_loop_limit_records_only_first_iterations(trace_code):
+    code = """
+        def double(v):
+            return v * 2
+
+        total = 0
+        for i in range(100):
+            total += double(i)
+        done = total
+        """
+    full = trace_code(code)
+    lim = trace_code(code, loop_limit=3)
+    assert len(lim["steps"]) < len(full["steps"]) / 10
+    assert lim["loop_limit"] == 3
+    skips = [s for s in lim["steps"] if s.get("skipped")]
+    assert len(skips) == 1 and skips[0]["line"] == 7          # 반복문 다음 줄에서 다시 기록
+    assert final_globals(lim)["done"]["r"] == str(sum(i * 2 for i in range(100)))
+    assert sum(1 for s in lim["steps"] if s["event"] == "call" and s["func"] == "double") == 3
+
+
+def test_loop_limit_still_records_the_error(trace_code):
+    t = trace_code("""
+        for i in range(50):
+            x = 10 / (40 - i)
+        """, loop_limit=2)
+    assert t["error"]["type"] == "ZeroDivisionError"
+    assert any(s["event"] == "exception" for s in t["steps"])
+
+
+def test_pyrewind_env_flag_is_set_only_while_running(trace_code):
+    import os
+    t = trace_code("""
+        import os
+        flag = os.environ.get("PYREWIND")
+        """)
+    assert final_globals(t)["flag"]["r"] == "'1'"
+    assert os.environ.get("PYREWIND") is None
