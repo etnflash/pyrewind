@@ -150,6 +150,24 @@ kbd{font-family:inherit;font-size:11px;border:1px solid var(--border);border-bot
 .cell .cv{padding:2px 6px}
 .cell.chg{background:var(--changed)}
 .kv{border-collapse:collapse}
+/* 그림으로 보는 배열 / 텐서 / 이미지 */
+.nd{padding:6px 8px;display:flex;flex-direction:column;gap:6px}
+.nd-meta{font-size:11px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 10px}
+.nd-meta b{color:var(--text);font-weight:600}
+.nd-view{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
+.nd-img{image-rendering:pixelated;border:1px solid var(--border);border-radius:4px;background:repeating-conic-gradient(#8882 0 25%,transparent 0 50%) 0 0/12px 12px;max-width:100%}
+.nd-nav{display:flex;align-items:center;gap:8px;font-size:12px}
+.nd-nav input{flex:1;min-width:80px}
+.nd-nav .lab{font-family:"Cascadia Code",Consolas,monospace;min-width:52px}
+.nd-thumbs{display:flex;flex-wrap:wrap;gap:3px}
+.nd-thumbs img{width:26px;height:26px;object-fit:contain;image-rendering:pixelated;border:2px solid transparent;border-radius:3px;cursor:pointer;background:#8882}
+.nd-thumbs img.on{border-color:var(--accent)}
+.nd-vals{border-collapse:collapse;font-family:"Cascadia Code",Consolas,monospace;font-size:11px}
+.nd-vals td{border:1px solid var(--border);padding:1px 5px;text-align:right}
+.df-img{display:block;margin:6px 8px 0;image-rendering:pixelated;border:1px solid var(--border);border-radius:4px;max-width:calc(100% - 16px)}
+.textval{margin:0;padding:6px 8px;font-family:"Cascadia Code",Consolas,monospace;font-size:11.5px;white-space:pre;overflow:auto;max-height:260px}
+.plotly-box{width:100%;height:340px;margin:6px 0;background:#fff;border-radius:6px}
+.plotly-wait{display:block;padding:10px;color:var(--muted)}
 .kv td{padding:2px 6px;border-top:1px solid var(--border);vertical-align:top}
 .kv tr:first-child td{border-top:none}
 .kv td.k{border-right:1px solid var(--border);white-space:nowrap}
@@ -268,7 +286,47 @@ const N = steps.length;
 if (TRACE.values) for (const s of steps) for (const f of s.stack) f.vars = f.vars.map(([n, i]) => [n, TRACE.values[i]]);
 const IMAGES = TRACE.images || [];
 const IMG_RE = /\u0000img:(\d+)\u0000/g;
-const outHtml = text => esc(text).replace(IMG_RE, (_, i) => IMAGES[+i] ? `<img class="plot" src="data:image/png;base64,${IMAGES[+i]}" alt="그래프 ${+i + 1}">` : "");
+const outHtml = text => esc(text).replace(IMG_RE, (_, i) => {
+  const im = IMAGES[+i];
+  if (!im) return "";
+  if (typeof im === "object" && im.plotly) return `<span class="plotly-slot" data-i="${+i}"></span>`;
+  return `<img class="plot" src="data:image/png;base64,${im}" alt="그래프 ${+i + 1}">`;
+});
+/* plotly 그래프: 처음 필요할 때 plotly.js 를 불러오고, 한 번 그린 그래프는 단계를 넘겨도 다시 그리지 않고 옮겨 붙인다 */
+const PLOTS = new Map();
+let plotlyState = "";   // "" | "loading" | "ready" | "fail"
+function mountPlotly(root){
+  const slots = root.querySelectorAll(".plotly-slot");
+  if (!slots.length) return;
+  if (!window.Plotly) {
+    if (!plotlyState) {
+      plotlyState = "loading";
+      const sc = document.createElement("script");
+      sc.src = "https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js";
+      sc.onload = () => { plotlyState = "ready"; mountPlotly($("output")); };
+      sc.onerror = () => { plotlyState = "fail"; mountPlotly($("output")); };
+      document.head.appendChild(sc);
+    }
+    slots.forEach(sl => { sl.innerHTML = plotlyState === "fail"
+      ? `<span class="plotly-wait">📊 plotly 그래프를 보려면 인터넷 연결이 필요해요 (plotly.js 를 불러오지 못했습니다)</span>`
+      : `<span class="plotly-wait">📊 그래프 불러오는 중…</span>`; });
+    return;
+  }
+  slots.forEach(sl => {
+    const i = +sl.dataset.i;
+    let node = PLOTS.get(i);
+    if (node) { sl.replaceWith(node); return; }
+    node = document.createElement("div");
+    node.className = "plotly-box";
+    PLOTS.set(i, node);
+    sl.replaceWith(node);
+    try {
+      const fig = JSON.parse(IMAGES[i].plotly);
+      Plotly.newPlot(node, fig.data || [], Object.assign({margin: {l: 40, r: 10, t: 40, b: 40}}, fig.layout || {}),
+                     {responsive: true, displaylogo: false});
+    } catch (e) { node.textContent = "plotly 그래프를 그리지 못했습니다: " + e.message; }
+  });
+}
 const outPlain = text => text.replace(IMG_RE, "📈[그래프]");
 const srcLines = TRACE.source.replace(/\r\n/g,"\n").split("\n");
 if (srcLines.length && srcLines[srcLines.length-1]==="") srcLines.pop();
@@ -303,7 +361,7 @@ function badge(id){
 (function prenumber(){
   const walk = v => {
     if (!v || typeof v !== "object") return;
-    if (v.id !== undefined && ["seq","map","obj","df","series"].includes(v.k)) badge(v.id);
+    if (v.id !== undefined && ["seq","map","obj","df","series","nd","text"].includes(v.k)) badge(v.id);
     if (v.items) v.items.forEach(it => Array.isArray(it) ? it.forEach(walk) : walk(it));
     if (v.attrs) v.attrs.forEach(a => walk(a[1]));
   };
@@ -329,11 +387,56 @@ function toText(v, max=70){
         ? `DataFrame ${v.shape[0]}행×${v.shape[1]}열 [${v.cols.join(", ")}]`
         : `${v.t} ${v.shape[0]}×${v.shape[1]} [[${v.rows[0] ? v.rows[0].slice(0, 4).join(", ") : ""}…], …]`;
       case "series": return `Series${v.name ? " '" + v.name + "'" : ""} ${v.len}개 [${v.values.slice(0,5).join(", ")}${v.len > 5 ? ", …" : ""}]`;
+      case "nd": return `${v.t} (${v.shape.join(", ")})`;
+      case "text": return `${v.t}${v.note ? " · " + v.note : ""}`;
     }
     return "?";
   })();
   return t.length > max ? t.slice(0, max-1) + "…" : t;
 }
+
+/* ---------- 3차원 이상 배열 / 텐서 / 이미지: 장(slice)별 그림 ---------- */
+const ND = new Map();        // 화면에 그린 nd 값 (슬라이더가 참조)
+const ndPick = new Map();    // 객체 번호 → 고른 장 번호
+let ndSeq = 0;
+function ndScale(sl){ const m = Math.max(sl.w, sl.h); return m <= 16 ? 96 / m : m <= 64 ? 128 / m : Math.min(1.6, 180 / m); }
+function ndSlice(v, i){
+  const sl = v.slices[i];
+  const k = ndScale(sl);
+  const img = `<img class="nd-img" src="${sl.src}" width="${Math.round(sl.w * k)}" height="${Math.round(sl.h * k)}" alt="">`;
+  const vals = sl.vals ? `<table class="nd-vals">${sl.vals.map(r => `<tr>${r.map(x => `<td>${esc(x)}</td>`).join("")}</tr>`).join("")}</table>` : "";
+  return img + vals;
+}
+function renderNd(v){
+  const key = ++ndSeq;
+  ND.set(key, v);
+  const n = v.slices.length;
+  let i = Math.min(ndPick.get(v.id) || 0, n - 1);
+  const st = v.stats ? `<span>최소 <b>${esc(v.stats.min)}</b></span><span>최대 <b>${esc(v.stats.max)}</b></span><span>평균 <b>${esc(v.stats.mean)}</b>${v.stats.approx ? " (일부로 계산)" : ""}</span>` : "";
+  const head = `<div class="box-head">${esc(v.t)}${badge(v.id)} · 모양 (${v.shape.join(", ")})</div>`;
+  const meta = `<div class="nd-meta"><span>${esc(v.dims || "")}</span>${st}</div>`;
+  let nav = "";
+  if (n > 1) {
+    const more = v.total > n ? ` · 앞 ${n}장만 (전체 ${v.total}장)` : ` · 전체 ${v.total}장`;
+    nav = `<div class="nd-nav"><span class="lab">${esc(v.slices[i].l)}</span><input type="range" class="nd-range" data-key="${key}" min="0" max="${n - 1}" value="${i}"><span class="muted">${more}</span></div>
+      <div class="nd-thumbs">${v.slices.map((sl, j) => `<img src="${sl.src}" data-key="${key}" data-j="${j}" class="${j === i ? "on" : ""}" title="${esc(sl.l)}" alt="">`).join("")}</div>`;
+  }
+  return `<div class="box">${head}<div class="nd" data-key="${key}">${meta}${nav}<div class="nd-view">${ndSlice(v, i)}</div></div></div>`;
+}
+function ndShow(key, j){
+  const v = ND.get(key);
+  if (!v) return;
+  ndPick.set(v.id, j);
+  document.querySelectorAll(`.nd[data-key="${key}"]`).forEach(box => {
+    box.querySelector(".nd-view").innerHTML = ndSlice(v, j);
+    const lab = box.querySelector(".lab"); if (lab) lab.textContent = v.slices[j].l;
+    const r = box.querySelector(".nd-range"); if (r) r.value = j;
+    box.querySelectorAll(".nd-thumbs img").forEach(im => im.classList.toggle("on", +im.dataset.j === j));
+  });
+}
+document.addEventListener("input", e => { if (e.target.classList && e.target.classList.contains("nd-range")) ndShow(+e.target.dataset.key, +e.target.value); });
+document.addEventListener("click", e => { const t = e.target; if (t.closest && t.closest(".nd-thumbs") && t.dataset.j !== undefined) ndShow(+t.dataset.key, +t.dataset.j); });
+document.addEventListener("keydown", e => { if (e.target.classList && e.target.classList.contains("nd-range")) e.stopPropagation(); }, true);
 
 /* ---------- 값 -> 시각화 HTML (이전 값과 비교해 바뀐 칸 강조) ---------- */
 function renderVal(v, p){
@@ -395,8 +498,11 @@ function renderVal(v, p){
         }).join("")}${extraCol ? "<td></td>" : ""}</tr>`;
       }).join("");
       const more = v.shape[0] > v.rows.length ? `<tr><td class="more" colspan="${v.cols.length+2}">… ${v.shape[0]-v.rows.length}행 더 있음</td></tr>` : "";
-      return `<div class="box">${head}<div class="dfwrap"><table class="df">${th}${body}${more}</table></div></div>`;
+      const pic = v.img ? `<img class="df-img" src="${v.img}" style="width:${Math.min(160, Math.max(56, v.shape[1] * 4))}px" alt="그림으로 보기" title="값의 크기를 밝기로 그린 그림 (밝을수록 큰 값)">` : "";
+      return `<div class="box">${head}${pic}<div class="dfwrap"><table class="df">${th}${body}${more}</table></div></div>`;
     }
+    case "nd": return renderNd(v);
+    case "text": return `<div class="box"><div class="box-head">${esc(v.t)}${badge(v.id)}${v.note ? " · " + esc(v.note) : ""}</div><pre class="textval">${esc(v.r)}</pre></div>`;
     case "series": {
       const ps2 = p && p.k==="series" ? new Map(p.index.map((r,i)=>[r,p.values[i]])) : null;
       const head = `<div class="box-head">Series${v.name ? " '" + esc(v.name) + "'" : ""}${badge(v.id)} · ${v.len}개 · ${esc(v.dtype)}</div>`;
@@ -511,6 +617,7 @@ function render(){
 
   // 프레임/변수
   // 지금 실행 중인 프레임을 맨 위에, 호출한 쪽은 아래에
+  ND.clear();
   const fr = s.stack.map((f, idx) => [f, idx]).reverse().map(([f, idx]) => {
     const d = diffs.get(f.fid);
     const active = idx === s.stack.length - 1;
@@ -550,6 +657,7 @@ function render(){
   let outText = outHtml(TRACE.output.slice(0, start)) + (end > start ? `<mark>${outHtml(TRACE.output.slice(start, end))}</mark>` : "");
   if (isLast && TRACE.error) outText += `<span class="errtb">${esc(TRACE.error.tb)}</span>`;
   $("output").innerHTML = outText || `<span class="muted">(아직 출력 없음)</span>`;
+  mountPlotly($("output"));
   $("output").scrollTop = $("output").scrollHeight;
 
   // 설명

@@ -9,14 +9,17 @@ sys.settrace 를 이용해 사용자 파일 안에서 일어나는
 """
 from __future__ import annotations
 
+import base64
 import builtins
 import inspect
 import json
 import linecache
 import os
+import struct
 import sys
 import traceback
 import types
+import zlib
 from collections import deque
 
 from .errors import explain_error, suggest_fix
@@ -30,6 +33,60 @@ _GEN_FLAGS = inspect.CO_GENERATOR | inspect.CO_COROUTINE | inspect.CO_ASYNC_GENE
 # matplotlib 그림을 받을 콜백 (mpl_backend 가 사용). 실행 중에만 설정된다.
 IMAGE_HOOK = None
 _MPL_BACKEND = "module://pyrewind.mpl_backend"
+
+
+def _emit_plotly(fig) -> bool:
+    """plotly 그림을 (마우스로 돌려 볼 수 있게) 출력에 넣는다."""
+    hook = IMAGE_HOOK
+    if hook is None:
+        return False
+    try:
+        hook({"plotly": fig.to_json()})
+        return True
+    except Exception:
+        return False
+
+
+def _patch_plotly() -> bool:
+    """plotly 를 불러왔으면 fig.show() 가 브라우저 대신 PyRewind 출력으로 오게 한다."""
+    pio = sys.modules.get("plotly.io")
+    if pio is None:
+        return False
+    if getattr(pio, "_pyrewind_orig_show", None) is None:
+        orig = pio.show
+
+        def show(fig, *args, **kwargs):
+            if not _emit_plotly(fig):
+                return orig(fig, *args, **kwargs)
+        pio._pyrewind_orig_show = orig
+        pio.show = show
+    return True
+
+
+def _unpatch_plotly():
+    pio = sys.modules.get("plotly.io")
+    orig = getattr(pio, "_pyrewind_orig_show", None) if pio else None
+    if orig is not None:
+        pio.show = orig
+        pio._pyrewind_orig_show = None
+
+
+def _emit_pil(im) -> bool:
+    hook = IMAGE_HOOK
+    if hook is None:
+        return False
+    try:
+        import io as _io
+        x = im.copy()
+        x.thumbnail((480, 480))
+        if x.mode not in ("RGB", "RGBA", "L"):
+            x = x.convert("RGBA" if "A" in x.mode else "RGB")
+        buf = _io.BytesIO()
+        x.save(buf, format="PNG")
+        hook(base64.b64encode(buf.getvalue()).decode("ascii"))
+        return True
+    except Exception:
+        return False
 
 
 def _flush_figures():
@@ -75,6 +132,11 @@ class Encoder:
         tn = t.__name__
 
         if v is None or isinstance(v, (bool, int, float, complex)):
+            if t not in _BUILTIN_NUM and hasattr(v, "item"):  # np.float64(1.5) -> 1.5
+                try:
+                    return {"k": "prim", "t": tn, "r": _safe_repr(v.item())}
+                except Exception:
+                    pass
             return {"k": "prim", "t": tn, "r": _safe_repr(v)}
         if isinstance(v, str):
             return {"k": "prim", "t": "str", "r": _safe_repr(v)}
@@ -99,6 +161,11 @@ class Encoder:
             return {"k": "more", "t": tn, "r": _safe_repr(v, 60), "id": oid}
         sub = path + (oid,)
 
+        fields = getattr(t, "_fields", None) if isinstance(v, tuple) else None
+        if fields and all(isinstance(f, str) for f in fields):
+            attrs = [[f, self.encode(getattr(v, f, None), depth + 1, sub)] for f in list(fields)[:MAX_ITEMS]]
+            return {"k": "obj", "t": tn, "id": oid, "attrs": attrs}
+
         if isinstance(v, (list, tuple, set, frozenset, deque)):
             src = _sorted_safe(v) if isinstance(v, (set, frozenset)) else v
             items = []
@@ -121,7 +188,18 @@ class Encoder:
             enc = self._encode_numeric_lib(v, tn, oid, depth, sub)
             if enc is not None:
                 return enc
-        if mod in ("numpy", "pandas", "torch", "polars"):
+        if mod in ("torch", "tensorflow", "keras", "jax", "jaxlib"):
+            enc = self._encode_dl(v, tn, oid, mod)
+            if enc is not None:
+                return enc
+        if mod in ("matplotlib", "plotly"):
+            # 그림 객체의 내부 속성은 수백 개라 보기 어렵다 → 한 줄 요약 (그림 자체는 출력 칸에)
+            return {"k": "prim", "t": tn, "r": _figure_summary(v, mod)}
+        if mod == "PIL":
+            enc = self._encode_pil(v, tn, oid)
+            if enc is not None:
+                return enc
+        if mod in ("numpy", "pandas", "torch", "polars", "tensorflow", "keras", "jax", "jaxlib"):
             return {"k": "prim", "t": tn, "r": _safe_repr(v, 600)}
 
         d = getattr(v, "__dict__", None)
@@ -146,20 +224,7 @@ class Encoder:
                 e["t"] = tn
                 return e
             if tn == "ndarray":
-                label = f"ndarray[{v.dtype}]"
-                if v.ndim == 1:  # 1차원: 칸으로 (앞쪽 MAX_ARR 개)
-                    items = [{"k": "prim", "t": str(v.dtype), "r": _cell(x)} for x in v[:MAX_ARR].tolist()]
-                    return {"k": "seq", "t": label, "id": oid, "len": int(v.size), "items": items}
-                if v.ndim == 2:  # 2차원: 표로 (DataFrame 과 같은 모양)
-                    r, c = v.shape
-                    part = v[:MAX_DF_ROWS, :MAX_DF_COLS]
-                    return {
-                        "k": "df", "t": label, "id": oid, "shape": [int(r), int(c)],
-                        "cols": [str(j) for j in range(part.shape[1])], "dtypes": [""] * part.shape[1],
-                        "index": [str(i) for i in range(part.shape[0])], "index_name": "",
-                        "rows": [[_cell(x) for x in row] for row in part.tolist()],
-                    }
-                return {"k": "prim", "t": f"{label} shape={v.shape}", "r": _safe_repr(v, 300)}
+                return _encode_array(v, f"ndarray[{v.dtype}]", oid)
             if tn == "DataFrame":
                 r, c = v.shape
                 part = v.iloc[:MAX_DF_ROWS, :MAX_DF_COLS]
@@ -188,9 +253,291 @@ class Encoder:
         return None
 
 
+    # --- 딥러닝 텐서 / 모델 (torch, tensorflow, jax) ----------------------
+    def _encode_dl(self, v, tn, oid, mod):
+        try:
+            # 모델: 구조 출력(repr)이 가장 알아보기 쉽다
+            if mod == "torch" and hasattr(v, "named_parameters") and hasattr(v, "forward"):
+                n = sum(int(p.numel()) for p in v.parameters())
+                return {"k": "text", "t": tn, "id": oid, "r": _short(repr(v), 3000),
+                        "note": f"학습할 값(파라미터) {n:,}개"}
+            if hasattr(v, "count_params") and hasattr(v, "layers"):  # keras 모델
+                lines = [f"{type(l).__name__}  {getattr(l, 'name', '')}" for l in list(v.layers)[:60]]
+                return {"k": "text", "t": tn, "id": oid, "r": "\n".join(lines) or tn,
+                        "note": f"학습할 값(파라미터) {int(v.count_params()):,}개"}
+            shape = getattr(v, "shape", None)
+            if shape is None or not hasattr(v, "dtype"):
+                return None
+            shape = tuple(int(x) for x in shape)
+            dt = v.dtype
+            dtype = getattr(dt, "name", None) if mod in ("tensorflow", "keras") else None
+            dtype = dtype or str(dt).replace("torch.", "")
+            info = [dtype]
+            dev = getattr(v, "device", None)
+            if dev is not None and mod == "torch":
+                info.append(str(dev))
+            elif isinstance(dev, str) and "GPU" in dev.upper():
+                info.append("GPU")
+            if getattr(v, "requires_grad", False):
+                info.append("grad")
+            label = f"{tn}[{', '.join(info)}]"
+            a, approx = _tensor_to_numpy(v, shape, mod)
+            if a is None:
+                return None
+            return _encode_array(a, label, oid, full_shape=shape, approx=approx,
+                                 stats=_tensor_stats(v, mod) if approx else None)
+        except Exception:
+            return None
+
+    # --- PIL 이미지 ----------------------------------------------------
+    def _encode_pil(self, v, tn, oid):
+        if not (hasattr(v, "size") and hasattr(v, "mode") and hasattr(v, "getpixel")):
+            return None
+        try:
+            w, h = v.size
+            key = ("pil", id(v), v.size, v.mode, _pil_probe(v))
+            src = _PNG_CACHE.get(key)
+            if src is None:
+                import io as _io
+                im = v.copy()
+                im.thumbnail((THUMB, THUMB))
+                if im.mode not in ("RGB", "RGBA", "L"):
+                    im = im.convert("RGBA" if "A" in im.mode else "RGB")
+                buf = _io.BytesIO()
+                im.save(buf, format="PNG")
+                src = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+                _cache_put(key, src)
+            ch = len(v.getbands())
+            return {"k": "nd", "t": f"{tn}[{v.mode}]", "id": oid,
+                    "shape": [h, w] + ([ch] if ch > 1 else []),
+                    "dims": "높이 × 너비" + (" × 채널" if ch > 1 else ""),
+                    "slices": [{"l": "", "src": src, "w": w, "h": h}], "total": 1, "stats": None}
+        except Exception:
+            return None
+
+
 MAX_DF_ROWS = 12
 MAX_DF_COLS = 12
 MAX_ARR = 20
+THUMB = 128          # 그림으로 보여줄 때 가장 긴 변 (픽셀)
+MAX_SLICES = 16      # 3차원 이상 배열에서 그림으로 보여줄 최대 장 수
+_BUILTIN_NUM = (bool, int, float, complex, type(None))
+_PNG_CACHE: dict = {}
+
+
+def _figure_summary(v, mod) -> str:
+    try:
+        if mod == "plotly" and hasattr(v, "data") and hasattr(v, "layout"):
+            kinds = [type(tr).__name__ for tr in v.data]
+            title = getattr(getattr(v.layout, "title", None), "text", None)
+            parts = [f"그래프 {len(kinds)}개: {', '.join(kinds[:5])}" if kinds else "빈 그림"]
+            if title:
+                parts.append(f"제목 '{title}'")
+            return " · ".join(parts) + "  (fig.show() 하면 출력 칸에 표시)"
+    except Exception:
+        pass
+    return _safe_repr(v, 200)
+
+
+def _cache_put(key, val):
+    if len(_PNG_CACHE) > 4000:
+        _PNG_CACHE.clear()
+    _PNG_CACHE[key] = val
+
+
+def _pil_probe(im):
+    """PIL 이미지가 제자리에서 바뀌었는지 대략 알기 위해 몇 픽셀을 읽는다."""
+    w, h = im.size
+    if not w or not h:
+        return None
+    pts = [(x * (w - 1) // 3, y * (h - 1) // 3) for x in range(4) for y in range(4)]
+    try:
+        return tuple(im.getpixel(p) for p in pts)
+    except Exception:
+        return None
+
+
+# ---------------------------------------------------------------- 배열 → 표 / 그림
+
+def _encode_array(a, label, oid, full_shape=None, approx=False, stats=None):
+    """numpy 배열 (또는 텐서를 numpy 로 바꾼 것) 을 뷰어 형식으로.
+    1차원 → 칸, 2차원 → 표 (+ 충분히 크면 그림), 3차원 이상 → 장(slice)별 그림."""
+    import numpy as np
+    shape = tuple(int(x) for x in (full_shape if full_shape is not None else a.shape))
+    if a.ndim == 0:
+        return {"k": "prim", "t": label, "r": _cell(a.item())}
+    if a.ndim == 1:
+        items = [{"k": "prim", "t": str(a.dtype), "r": _cell(x)} for x in a[:MAX_ARR].tolist()]
+        return {"k": "seq", "t": label, "id": oid, "len": shape[0], "items": items}
+    numeric = a.dtype.kind in "biuf"
+    if a.ndim == 2:
+        r, c = shape
+        part = a[:MAX_DF_ROWS, :MAX_DF_COLS]
+        e = {
+            "k": "df", "t": label, "id": oid, "shape": [r, c],
+            "cols": [str(j) for j in range(part.shape[1])], "dtypes": [""] * part.shape[1],
+            "index": [str(i) for i in range(part.shape[0])], "index_name": "",
+            "rows": [[_cell(x) for x in row] for row in part.tolist()],
+        }
+        if numeric and min(a.shape) >= 8:   # 28×28 손글씨 같은 2차원 그림
+            lo, hi = _range(a, np)
+            e["img"] = _png_src(_to_u8(_shrink(a, np), lo, hi, np), np)
+        return e
+    if not numeric:
+        return {"k": "prim", "t": f"{label} shape={shape}", "r": _safe_repr(a, 300)}
+    planes, total, dims = _planes(a, shape, np)
+    lo, hi = _range(a, np)
+    slices = []
+    for lab, pl in planes:
+        small = _shrink(pl, np)
+        sl = {"l": lab, "src": _png_src(_to_u8(small, lo, hi, np), np),
+              "w": int(pl.shape[1]), "h": int(pl.shape[0])}
+        if pl.ndim == 2 and pl.shape[0] * pl.shape[1] <= 64:   # 3×3 필터처럼 작으면 숫자도
+            sl["vals"] = [[_cell(x) for x in row] for row in pl.tolist()]
+        slices.append(sl)
+    if stats is None:
+        stats = _np_stats(a, np, approx)
+    return {"k": "nd", "t": label, "id": oid, "shape": list(shape), "dims": dims,
+            "slices": slices, "total": total, "stats": stats}
+
+
+def _planes(a, shape, np):
+    """그림으로 그릴 2차원(또는 컬러) 장 목록, 전체 장 수, 축 설명."""
+    s = a.shape
+
+    def color(n):
+        return n in (3, 4)
+
+    if a.ndim == 3:
+        if color(s[2]) and s[0] > 4 and s[1] > 4:
+            return [("", a)], 1, "높이 × 너비 × 색(RGB)"
+        if s[2] == 1:
+            return [("", a[..., 0])], 1, "높이 × 너비 × 1"
+        if s[0] == 3 and s[1] > 4 and s[2] > 4:   # 채널 먼저(CHW)는 RGB 3채널만 (4채널은 보통 특징 맵)
+            return [("", a.transpose(1, 2, 0))], 1, "색(RGB) × 높이 × 너비"
+        return [(f"[{i}]", a[i]) for i in range(min(s[0], MAX_SLICES))], shape[0], "장 × 높이 × 너비"
+    if a.ndim == 4:
+        n = shape[0]
+        k = min(s[0], MAX_SLICES)
+        if color(s[3]) and s[1] > 4 and s[2] > 4:
+            return [(f"[{i}]", a[i]) for i in range(k)], n, "개수 × 높이 × 너비 × 색"
+        if s[1] == 3 and s[2] > 4 and s[3] > 4:
+            return [(f"[{i}]", a[i].transpose(1, 2, 0)) for i in range(k)], n, "개수 × 색 × 높이 × 너비"
+        if s[1] == 1:
+            return [(f"[{i}]", a[i, 0]) for i in range(k)], n, "개수 × 1 × 높이 × 너비"
+        if s[3] == 1:
+            return [(f"[{i}]", a[i, ..., 0]) for i in range(k)], n, "개수 × 높이 × 너비 × 1"
+        out = [(f"[{i}, {j}]", a[i, j]) for i in range(s[0]) for j in range(s[1])][:MAX_SLICES]
+        return out, shape[0] * shape[1], "개수 × 채널 × 높이 × 너비"
+    lead = a.reshape(-1, s[-2], s[-1])
+    total = 1
+    for x in shape[:-2]:
+        total *= x
+    out = []
+    for i in range(min(lead.shape[0], MAX_SLICES)):
+        idx = np.unravel_index(i, s[:-2])
+        out.append((f"[{', '.join(str(int(x)) for x in idx)}]", lead[i]))
+    return out, total, " × ".join(["…"] * (a.ndim - 2) + ["높이", "너비"])
+
+
+def _shrink(pl, np):
+    h, w = pl.shape[0], pl.shape[1]
+    st = max(1, -(-max(h, w) // THUMB))
+    return pl[::st, ::st] if st > 1 else pl
+
+
+def _range(a, np):
+    """그림 밝기 기준. 0~1 실수 / 0~255 정수 그림은 그대로, 나머지는 최솟값~최댓값."""
+    if a.dtype == np.uint8:
+        return 0.0, 255.0
+    if a.dtype == np.bool_:
+        return 0.0, 1.0
+    sample = a if a.size <= 2_000_000 else a.reshape(-1)[:: a.size // 1_000_000 + 1]
+    with np.errstate(all="ignore"):
+        lo, hi = float(np.nanmin(sample)), float(np.nanmax(sample))
+    if lo != lo or hi != hi:
+        return 0.0, 1.0
+    if a.dtype.kind == "f" and lo >= 0 and hi <= 1:
+        return 0.0, 1.0
+    if a.dtype.kind in "iu" and lo >= 0 and 1 < hi <= 255:
+        return 0.0, 255.0
+    return lo, hi
+
+
+def _to_u8(pl, lo, hi, np):
+    if pl.dtype == np.uint8:
+        return np.ascontiguousarray(pl)
+    x = np.nan_to_num(pl.astype(np.float64), nan=lo)
+    if hi <= lo:
+        return np.full(pl.shape, 128 if hi else 0, dtype=np.uint8)
+    return np.ascontiguousarray(((x - lo) * (255.0 / (hi - lo))).clip(0, 255).astype(np.uint8))
+
+
+def _png_src(u8, np):
+    """uint8 배열 (높이×너비 또는 높이×너비×3/4) → PNG data URL. 같은 그림은 캐시."""
+    key = ("png", u8.shape, hash(u8.tobytes()))
+    src = _PNG_CACHE.get(key)
+    if src is None:
+        src = "data:image/png;base64," + base64.b64encode(_png_bytes(u8, np)).decode("ascii")
+        _cache_put(key, src)
+    return src
+
+
+def _png_bytes(u8, np):
+    h, w = u8.shape[:2]
+    ch = 1 if u8.ndim == 2 else u8.shape[2]
+    color = {1: 0, 3: 2, 4: 6}[ch]
+    rows = u8.reshape(h, w * ch)
+    raw = np.concatenate([np.zeros((h, 1), dtype=np.uint8), rows], axis=1).tobytes()
+
+    def chunk(tag, data):
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, color, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw, 6)) + chunk(b"IEND", b""))
+
+
+def _np_stats(a, np, approx=False):
+    try:
+        sample = a if a.size <= 2_000_000 else a.reshape(-1)[:: a.size // 1_000_000 + 1]
+        with np.errstate(all="ignore"):
+            st = {"min": _cell(float(np.nanmin(sample))), "max": _cell(float(np.nanmax(sample))),
+                  "mean": _cell(float(np.nanmean(sample)))}
+        if approx or sample is not a:
+            st["approx"] = True
+        return st
+    except Exception:
+        return None
+
+
+def _tensor_to_numpy(v, shape, mod):
+    """텐서를 numpy 로. 아주 크면 앞쪽 일부만 잘라서 (복사 비용을 줄이려고) 바꾼다."""
+    numel = 1
+    for x in shape:
+        numel *= x
+    approx = False
+    x = v
+    if numel > 2_000_000 and len(shape) >= 3:
+        x = v[tuple(slice(0, MAX_SLICES) for _ in range(len(shape) - 2))]
+        approx = True
+    if mod == "torch":
+        x = x.detach()
+        if str(x.dtype) in ("torch.bfloat16", "torch.float16"):
+            x = x.float()
+        return x.cpu().numpy(), approx
+    if hasattr(x, "numpy"):
+        return x.numpy(), approx
+    import numpy as np
+    return np.asarray(x), approx
+
+
+def _tensor_stats(v, mod):
+    try:
+        if mod == "torch":
+            f = v.detach().float()
+            return {"min": _cell(f.min().item()), "max": _cell(f.max().item()), "mean": _cell(f.mean().item())}
+    except Exception:
+        pass
+    return None
 
 
 def _cell(x) -> str:
@@ -210,9 +557,15 @@ def _cell(x) -> str:
 
 
 def _vcr_display(value):
-    """노트북 셀의 마지막 식 값을 출력 (주피터의 Out[] 흉내)."""
-    if value is not None:
-        print(repr(value))
+    """노트북 셀의 마지막 식 값을 출력 (주피터의 Out[] 흉내). 그림은 그림으로."""
+    if value is None:
+        return
+    mod = (type(value).__module__ or "").split(".")[0]
+    if mod == "plotly" and hasattr(value, "to_json") and hasattr(value, "data") and _emit_plotly(value):
+        return
+    if mod == "PIL" and hasattr(value, "getpixel") and _emit_pil(value):
+        return
+    print(repr(value))
 
 
 def _jupyter_display(*values, **_kwargs):
@@ -301,6 +654,7 @@ class Tracer:
         self.focus_started = False
         self.focus_from_module = False   # 전역 코드에서 시작했으면 영역이 끝날 때 실행을 멈춘다
         self.focus_frames: set = set()   # 선택 영역에서 호출한 함수 프레임 (안쪽도 기록)
+        self.plotly_ready = False
 
     # --- 스냅샷 ---------------------------------------------------------
     def _frame_info(self, f) -> dict:
@@ -404,6 +758,8 @@ class Tracer:
             if frame not in self.fids:
                 self.fids[frame] = self.next_fid
                 self.next_fid += 1
+        if not self.plotly_ready and event == "line" and "plotly.io" in sys.modules:
+            self.plotly_ready = _patch_plotly()
         if self.cells and event == "line" and frame.f_code.co_name == "<module>":
             cell = self._cell_of(frame.f_lineno)
             if cell is not None and cell != self.last_cell:
@@ -483,9 +839,9 @@ def run_trace(path: str, source: str, *, max_steps: int = 3000,
 
     # matplotlib: 창을 띄우지 않고 그림을 PNG 로 받아 출력에 넣는다
     global IMAGE_HOOK
-    images: list[str] = []
+    images: list = []
 
-    def on_image(png_b64: str):
+    def on_image(png_b64):  # base64 PNG 문자열, 또는 {"plotly": json}
         images.append(png_b64)
         sink.append(f"\x00img:{len(images) - 1}\x00")
         if echo:
@@ -559,6 +915,7 @@ def run_trace(path: str, source: str, *, max_steps: int = 3000,
     finally:
         sys.settrace(None)
         _flush_figures()  # 마지막 셀에서 그리고 show() 안 한 그래프
+        _unpatch_plotly()
         IMAGE_HOOK = None
         if old_backend is None:
             os.environ.pop("MPLBACKEND", None)

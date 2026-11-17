@@ -34,8 +34,11 @@ EXPECTED = {
     "notebook_demo.ipynb": None,
     "pandas_tour.ipynb": None,
     "ml_tour.ipynb": None,
+    "vision_tour.ipynb": None,
+    "dl_tour.ipynb": None,
 }
-NEEDS = {"pandas_tour.ipynb": ["pandas"], "ml_tour.ipynb": ["pandas", "sklearn", "matplotlib"]}
+NEEDS = {"pandas_tour.ipynb": ["pandas"], "ml_tour.ipynb": ["pandas", "sklearn", "matplotlib"],
+         "vision_tour.ipynb": ["numpy", "PIL", "plotly"], "dl_tour.ipynb": ["torch"]}
 
 
 @pytest.mark.parametrize("name", sorted(EXPECTED))

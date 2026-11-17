@@ -21,7 +21,7 @@ classifiers = [
 [project.optional-dependencies]
 dev = ["pytest>=8"]
 # 예제 노트북과 라이브러리 테스트용
-examples = ["pandas", "numpy", "matplotlib", "scikit-learn"]
+examples = ["pandas", "numpy", "matplotlib", "scikit-learn", "scipy", "seaborn", "pillow", "plotly"]
 
 [project.scripts]
 pyrewind = "pyrewind.__main__:main"

@@ -33,7 +33,7 @@ cd visual-code-learner
 python -m venv .venv
 .venv\Scripts\activate            # macOS/Linux: source .venv/bin/activate
 pip install -e .                  # 도구 자체는 표준 라이브러리만 사용
-pip install -e ".[examples]"      # 예제 노트북용 (pandas, numpy, matplotlib, scikit-learn)
+pip install -e ".[examples]"      # 예제 노트북용 (pandas, numpy, matplotlib, scikit-learn, scipy, seaborn, pillow, plotly)
 ```
 
 ## 사용법
@@ -107,13 +107,16 @@ pyrewind 노트북.ipynb --cell 3         # 3번째 코드 셀만 기록 (--line
 
 결과는 틀렸지만 오류는 나지 않는 버그는 자동으로 찾지 못합니다. 변수 이름을 클릭해 값이 바뀐 기록을 따라가 보세요.
 
-## 노트북 · pandas · 머신러닝
+## 노트북 · pandas · 머신러닝 · 이미지 · 딥러닝
 
 - 셀의 마지막 줄이 식이면 주피터처럼 값을 출력하고, `display()`도 쓸 수 있어요. `%matplotlib`, `!pip` 같은 노트북 전용 명령은 건너뜁니다.
 - DataFrame / Series / numpy 배열은 **표나 칸**으로 보여주고, 바뀐 칸과 새 열을 강조합니다.
-- `plt.show()`로 그린 그래프는 **출력 칸에 이미지로** 나옵니다.
+- `plt.show()`로 그린 그래프(seaborn 포함)는 **출력 칸에 이미지로** 나옵니다. plotly의 `fig.show()`는 **마우스로 돌려 볼 수 있는 그래프**로 나와요 (3D 포함, plotly.js를 인터넷에서 불러옴).
+- **이미지**: 컬러 배열 `(높이, 너비, 3)`, PIL 이미지, 28×28 같은 2차원 배열은 **그림으로** 보입니다.
+- **3차원 이상 배열 / 텐서**: `(개수, 채널, 높이, 너비)` 같은 배열은 한 장씩 그림으로 보여주고 **슬라이더**로 넘겨 볼 수 있어요. 3×3 필터처럼 작으면 숫자도 같이 나옵니다.
+- **PyTorch / TensorFlow**: 텐서는 모양·dtype·장치(cpu/cuda)·grad 여부와 함께, 모델은 층 구조와 파라미터 수로 보여줍니다.
 - `apply(내함수)`처럼 라이브러리가 내 함수를 호출하면 그 함수 안도 한 줄씩 보입니다. 반대로 `model.fit()` 같은 라이브러리 내부 계산은 한 단계로 지나갑니다.
-- 예제: [pandas_tour.ipynb](examples/pandas_tour.ipynb) (32셀), [ml_tour.ipynb](examples/ml_tour.ipynb) (15셀)
+- 예제: [pandas_tour.ipynb](examples/pandas_tour.ipynb) (32셀), [ml_tour.ipynb](examples/ml_tour.ipynb) (15셀), [vision_tour.ipynb](examples/vision_tour.ipynb) (이미지·필터·3D 그래프), [dl_tour.ipynb](examples/dl_tour.ipynb) (PyTorch CNN)
 
 ## 동작 원리
 

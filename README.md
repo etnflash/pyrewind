@@ -23,7 +23,8 @@ Built for beginners who debug by staring at `print` output. The UI and error exp
 - **Run just a selection, a `# %%` block, or one notebook cell** (like R / Spyder): earlier code runs untraced to set up state, then only the selected lines (and functions they call) are recorded, and execution stops after the selection.
 - **Variables and call stack** for each step, with *new* / *changed* / *argument* highlights and `before → after` values.
 - **Structure-aware rendering**: lists as cells, dicts and objects as tables, pandas **DataFrame / Series** and numpy arrays as tables with changed cells highlighted. Aliases share an object number (`#1`), so `b = a; b.append(…)` is visible.
-- **Jupyter notebooks**: all code cells run as one program; last-expression output, `display()`, and matplotlib figures (rendered as images in the output pane) work like in Jupyter.
+- **Jupyter notebooks**: all code cells run as one program; last-expression output, `display()`, and matplotlib / seaborn figures (rendered as images in the output pane) work like in Jupyter. plotly `fig.show()` becomes an interactive (rotatable 3D) chart.
+- **Images, tensors, deep learning**: color arrays `(H, W, 3)`, PIL images and large 2-D arrays are drawn as pictures; 3-D+ arrays such as `(N, C, H, W)` batches or CNN feature maps are shown slice by slice with a slider. PyTorch / TensorFlow tensors show shape, dtype, device and grad; models show their layer structure and parameter count.
 - **Error helper**: plain-language explanation and fix for ~20 common errors, the values used on the failing line, a link to *the step where that value was set*, and **typo suggestions** pulled from the real object at the moment of failure (`df.groupbyy` → `groupby`, `test_sise=` → `test_size`, `import pandsa` → `pandas`).
 - **VS Code extension**: the viewer opens beside your editor; the current step is highlighted *in your source* (including notebook cells) with inline `◀ total: 5 → 14` hints; errors become diagnostics with **one-click quick fixes** and a `pip install` action for missing packages.
 - **Zero dependencies**: the tracer uses only the Python standard library; the viewer is a single offline HTML file you can share.
@@ -39,7 +40,7 @@ git clone <this repo>
 cd visual-code-learner
 python -m venv .venv && . .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -e .                                 # the tool itself (stdlib only)
-pip install -e ".[examples]"                     # pandas / numpy / matplotlib / scikit-learn for the examples
+pip install -e ".[examples]"                     # pandas, numpy, matplotlib, scikit-learn, scipy, seaborn, pillow, plotly
 
 pyrewind examples/basics.py                           # opens the viewer in your browser
 pyrewind examples/pandas_tour.ipynb
