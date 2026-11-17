@@ -497,8 +497,21 @@ async function openInBrowser(step) {
   // file:// 주소의 #step=N 은 OS 가 떼어 버릴 수 있어서, 시작 단계를 HTML 안에 직접 넣는다
   const html = current.html.replace("<head>", `<head><script>if(!location.hash)location.hash="step=${n}"</script>`);
   fs.writeFileSync(file, html, "utf8");
-  await vscode.env.openExternal(vscode.Uri.file(file));
+  openFile(file);
   return file;
+}
+
+// 파일을 기본 프로그램(브라우저)으로 연다.
+// Windows 에서 vscode.env.openExternal(Uri.file(...)) 은 한글 경로를 %EB%A7%A4… 로 바꿔 버려
+// "지정된 파일을 찾을 수 없습니다 (0x2)" 오류가 나므로 탐색기(explorer.exe)에 경로를 그대로 넘긴다.
+function openFile(file) {
+  if (process.platform === "win32" && !process.env.PYREWIND_TEST) {
+    try {
+      cp.spawn("explorer.exe", [file], { detached: true, stdio: "ignore", windowsHide: false }).unref();
+      return;
+    } catch (e) { /* 아래 방법으로 */ }
+  }
+  vscode.env.openExternal(vscode.Uri.file(file));
 }
 
 /* ------------------------------------------------------------- 에디터 동기화 */

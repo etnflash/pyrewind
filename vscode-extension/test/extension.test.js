@@ -11,6 +11,7 @@ const os = require("node:os");
 const EXT_DIR = path.resolve(__dirname, "..");
 const REPO = path.resolve(EXT_DIR, "..");
 const EXAMPLES = path.join(REPO, "examples");
+process.env.PYREWIND_TEST = "1";  // 테스트 중에는 실제 브라우저를 띄우지 않음
 const PYTHON = process.env.PYREWIND_PYTHON || (process.platform === "win32" ? "python" : "python3");
 
 /* ------------------------------------------------------------ 가짜 vscode */
