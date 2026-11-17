@@ -2,7 +2,7 @@
   "name": "pyrewind",
   "displayName": "PyRewind — 한줄씩 되감는 파이썬",
   "description": "파이썬 코드를 한 줄씩 앞뒤로 되감으며 변수가 만들어지고 바뀌는 과정을 에디터 옆에서 봅니다 (.py / .ipynb, pandas, 한국어 오류 도우미)",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "publisher": "etnflash",
   "license": "MIT",
   "icon": "icon.png",

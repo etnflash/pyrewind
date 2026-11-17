@@ -134,6 +134,8 @@ kbd{font-family:inherit;font-size:11px;border:1px solid var(--border);border-bot
 .tag{font-size:10.5px;font-weight:700;border-radius:4px;padding:0 5px;margin-left:6px;vertical-align:1px}
 .tag.new{background:var(--accent);color:#fff}.tag.chg{background:var(--next-bar);color:#000}.tag.arg{background:#8a6cf0;color:#fff}
 .empty-frame{padding:8px 10px;color:var(--muted);font-size:12.5px}
+.only-note{display:none;padding:6px 10px;color:var(--muted);font-size:12px}
+.frames-only-changed .only-note{display:block}
 /* 값 */
 .prim{font-family:"Cascadia Code",Consolas,monospace;white-space:pre-wrap;word-break:break-all}
 .t-str{color:var(--str)}.t-int,.t-float,.t-complex{color:var(--num)}.t-bool,.t-NoneType{color:var(--kw)}
@@ -241,9 +243,9 @@ kbd{font-family:inherit;font-size:11px;border:1px solid var(--border);border-bot
           <span><i style="background:var(--arg)"></i>함수 인자</span>
           <span><span class="badge">#1</span> 같은 번호 = 같은 객체</span>
         </span>
-        <label class="toggle"><input type="checkbox" id="onlyChanged"> 바뀐 것만 보기</label>
+        <label class="toggle"><input type="checkbox" id="onlyChanged" checked> 바뀐 것만 보기</label>
       </div>
-      <div id="frames"></div>
+      <div id="frames" class="frames-only-changed"></div>
     </div>
     <div class="panel" id="historyPanel" hidden>
       <div class="panel-title"><span id="historyTitle"></span><button id="historyClose" style="margin-left:auto;padding:0 8px">닫기</button></div>
@@ -515,6 +517,8 @@ function render(){
     let ret = "";
     if (active && s.event === "return" && s.ret && f.name !== "<module>") ret =`<span class="ret">반환값 → ${renderVal(s.ret)}</span>`;
     if (active && s.event === "return" && s.unwind) ret = `<span class="ret" style="color:var(--err-bar)">예외로 중단됨</span>`;
+    const shown = f.vars.filter(([name]) => { const i = d.vars.get(name); return i && ["new", "changed", "arg"].includes(i.kind); }).length;
+    const hidden = f.vars.length - shown;
     const rows = f.vars.map(([name, val]) => {
       const info = d.vars.get(name);
       const kind = info ? info.kind : "";
@@ -529,6 +533,7 @@ function render(){
     return `<div class="frame ${active ? "active" : ""}">
       <div class="frame-head">${idx > 0 ? `<span class="muted">${idx}단계 깊이</span> ` : ""}${esc(frameTitle(f))}<span class="sub">${active ? "← 지금 실행 중" : `${f.line}번 줄에서 호출하고 기다리는 중`}</span>${ret}</div>
       ${rows ? `<table class="vars">${rows}</table>` : `<div class="empty-frame">아직 변수가 없습니다</div>`}
+      ${hidden ? `<div class="only-note">${shown ? `바뀌지 않은 변수 ${hidden}개 숨김` : `이번 단계에서 바뀐 변수 없음 · 변수 ${hidden}개 숨김`}</div>` : ""}
     </div>`;
   }).join("");
   const framesEl = $("frames");
@@ -861,7 +866,13 @@ function togglePlay(){
   $("bPlay").textContent = "⏸ 멈춤";
   timer = setInterval(() => { if (cur >= N - 1) togglePlay(); else go(cur + 1); }, +$("speed").value);
 }
-$("onlyChanged").onchange = e => { $("frames").classList.toggle("frames-only-changed", e.target.checked); };
+// '바뀐 것만 보기'는 기본으로 켜져 있고, 끄거나 켠 선택은 이 브라우저(웹뷰)에 기억한다
+try { if (localStorage.getItem("pyrewind.onlyChanged") === "0") $("onlyChanged").checked = false; } catch (e) { /* 저장소 없음 */ }
+$("frames").classList.toggle("frames-only-changed", $("onlyChanged").checked);
+$("onlyChanged").onchange = e => {
+  $("frames").classList.toggle("frames-only-changed", e.target.checked);
+  try { localStorage.setItem("pyrewind.onlyChanged", e.target.checked ? "1" : "0"); } catch (err) { /* 무시 */ }
+};
 $("speed").onchange =() => { if (timer) { togglePlay(); togglePlay(); } };
 $("bFirst").onclick = () => go(0);
 $("bPrev").onclick = () => go(cur - 1);
